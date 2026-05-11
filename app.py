@@ -11,6 +11,21 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/doa")
+def doa():
+    return render_template("doa.html")
+
+
+@app.route("/surat")
+def surat():
+    return render_template("surat.html")
+
+
+@app.route("/surat/<int:nomor>")
+def detail_surat(nomor):
+    return render_template("detail_surat.html", nomor=nomor)
+
+
 @app.route("/api/provinces")
 def get_provinces():
     try:

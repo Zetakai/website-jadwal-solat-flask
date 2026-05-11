@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Daftar Surat{% endblock %}
+
+{% block header_title %}Al-Qur'an{% endblock %}
+{% block header_subtitle %}Bacaan Al-Qur'an & Surat Pendek{% endblock %}
+
+{% block extra_css %}
+.search-wrapper {
+    margin-bottom: 1.5rem;
+}
+.search-input {
+    width: 100%;
+    padding: 0.9rem 1.25rem;
+    border: 1px solid rgba(16,185,129,0.4);
+    border-radius: 12px;
+    background: rgba(6, 78, 59, 0.6);
+    color: #ecfdf5;
+    font-size: 0.95rem;
+    font-family: 'Poppins', sans-serif;
+    transition: all 0.3s ease;
+}
+.search-input:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+}
+.surat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+    transition: transform 0.2s ease, background 0.2s ease;
+    cursor: pointer;
+}
+.surat-item:hover {
+    background: rgba(16,185,129,0.15);
+    transform: translateY(-2px);
+}
+.surat-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.surat-number {
+    width: 32px;
+    height: 32px;
+    background: rgba(16,185,129,0.2);
+    border: 1px solid rgba(16,185,129,0.4);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #10b981;
+    transform: rotate(45deg);
+}
+.surat-number span {
+    transform: rotate(-45deg);
+}
+.surat-info {
+    display: flex;
+    flex-direction: column;
+}
+.surat-name {
+    font-weight: 600;
+    color: #ecfdf5;
+    font-size: 0.95rem;
+}
+.surat-meta {
+    font-size: 0.7rem;
+    color: #6ee7b7;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.surat-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 1.4rem;
+    color: #10b981;
+}
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #6ee7b7;
+    font-size: 0.9rem;
+}
+.filter-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.filter-btn {
+    flex: 1;
+    padding: 0.6rem;
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 10px;
+    background: rgba(6, 78, 59, 0.4);
+    color: #6ee7b7;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.filter-btn.active {
+    background: rgba(16,185,129,0.2);
+    border-color: #10b981;
+    color: #ecfdf5;
+    box-shadow: 0 0 15px rgba(16,185,129,0.2);
+}
+{% endblock %}
+
+{% block content %}
+<div class="search-wrapper">
+    <input type="text" id="search-surat" class="search-input" placeholder="Cari surat...">
+</div>
+
+<div class="filter-wrapper">
+    <button class="filter-btn active" id="filter-all">Semua</button>
+    <button class="filter-btn" id="filter-pendek">Surat Pendek</button>
+</div>
+
+<div id="surat-list"></div>
+
+<div id="loading" class="card">
+    <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Memuat daftar surat...</p>
+    </div>
+</div>
+
+<div id="error" class="card" style="display: none;">
+    <div class="error">
+        <p id="error-text"></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const suratListEl = document.getElementById('surat-list');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorText = document.getElementById('error-text');
+    const searchInput = document.getElementById('search-surat');
+    const filterAll = document.getElementById('filter-all');
+    const filterPendek = document.getElementById('filter-pendek');
+
+    let allSurat = [];
+    let currentFilter = 'all';
+
+    async function fetchSurat() {
+        try {
+            const res = await fetch('https://equran.id/api/v2/surat');
+            const data = await res.json();
+            allSurat = data.data || [];
+            applyFilters();
+            loadingEl.style.display = 'none';
+        } catch (e) {
+            loadingEl.style.display = 'none';
+            errorText.textContent = 'Gagal memuat daftar surat';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    function applyFilters() {
+        let filtered = allSurat;
+        
+        const query = searchInput.value.toLowerCase();
+        if (query) {
+            filtered = filtered.filter(s => 
+                s.namaLatin.toLowerCase().includes(query) || 
+                s.arti.toLowerCase().includes(query)
+            );
+        }
+
+        if (currentFilter === 'pendek') {
+            filtered = filtered.filter(s => s.nomor >= 93);
+        }
+
+        displaySurat(filtered);
+    }
+
+    function displaySurat(suratArray) {
+        suratListEl.innerHTML = '';
+        
+        if (suratArray.length === 0) {
+            suratListEl.innerHTML = '<div class="empty-state">Surat tidak ditemukan</div>';
+            return;
+        }
+
+        suratArray.forEach(s => {
+            const a = document.createElement('a');
+            a.href = `/surat/${s.nomor}`;
+            a.className = 'card surat-item';
+            a.innerHTML = `
+                <div class="surat-left">
+                    <div class="surat-number"><span>${s.nomor}</span></div>
+                    <div class="surat-info">
+                        <div class="surat-name">${s.namaLatin}</div>
+                        <div class="surat-meta">${s.tempatTurun} • ${s.jumlahAyat} AYAT</div>
+                    </div>
+                </div>
+                <div class="surat-arabic">${s.nama}</div>
+            `;
+            suratListEl.appendChild(a);
+        });
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+
+    filterAll.addEventListener('click', () => {
+        currentFilter = 'all';
+        filterAll.classList.add('active');
+        filterPendek.classList.remove('active');
+        applyFilters();
+    });
+
+    filterPendek.addEventListener('click', () => {
+        currentFilter = 'pendek';
+        filterPendek.classList.add('active');
+        filterAll.classList.remove('active');
+        applyFilters();
+    });
+
+    fetchSurat();
+</script>
+{% endblock %}

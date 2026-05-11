@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Surat {{ nomor }}{% endblock %}
+
+{% block header_title %}Memuat...{% endblock %}
+{% block header_subtitle %}Al-Qur'an Digital{% endblock %}
+
+{% block extra_css %}
+.surat-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(16,185,129,0.3);
+}
+.surat-header h2 {
+    font-family: 'Amiri', serif;
+    font-size: 2.5rem;
+    color: #10b981;
+    margin-bottom: 0.5rem;
+}
+.surat-header .arti {
+    color: #6ee7b7;
+    font-size: 0.9rem;
+    font-weight: 300;
+}
+.ayat-item {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(16,185,129,0.1);
+}
+.ayat-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+.ayat-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+}
+.ayat-number {
+    width: 28px;
+    height: 28px;
+    background: rgba(16,185,129,0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: #10b981;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.ayat-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 1.8rem;
+    color: #ecfdf5;
+    text-align: right;
+    line-height: 2.5;
+    word-break: break-word;
+}
+.ayat-latin {
+    font-style: italic;
+    color: #6ee7b7;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+.ayat-translation {
+    color: #d1fae5;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #10b981;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+    transition: all 0.2s ease;
+}
+.back-button:hover {
+    color: #34d399;
+    transform: translateX(-4px);
+}
+.audio-player {
+    margin-top: 1rem;
+    width: 100%;
+    height: 35px;
+    border-radius: 10px;
+    filter: sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%);
+}
+{% endblock %}
+
+{% block content %}
+<a href="/surat" class="back-button">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    Kembali ke Daftar
+</a>
+
+<div id="surat-detail-card" class="card" style="display: none;">
+    <div class="surat-header">
+        <h2 id="surat-name-arabic"></h2>
+        <div class="arti" id="surat-arti"></div>
+    </div>
+    <div id="ayat-list"></div>
+</div>
+
+<div id="loading" class="card">
+    <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Memuat isi surat...</p>
+    </div>
+</div>
+
+<div id="error" class="card" style="display: none;">
+    <div class="error">
+        <p id="error-text"></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const nomorSurat = {{ nomor }};
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorText = document.getElementById('error-text');
+    const detailCard = document.getElementById('surat-detail-card');
+    const ayatListEl = document.getElementById('ayat-list');
+    const nameArabicEl = document.getElementById('surat-name-arabic');
+    const artiEl = document.getElementById('surat-arti');
+    const headerTitleEl = document.querySelector('.header h1');
+    const headerSubtitleEl = document.querySelector('.header p');
+
+    async function fetchDetailSurat() {
+        try {
+            const res = await fetch(`https://equran.id/api/v2/surat/${nomorSurat}`);
+            const data = await res.json();
+            const surat = data.data;
+
+            headerTitleEl.textContent = `Surat ${surat.namaLatin}`;
+            headerSubtitleEl.textContent = `${surat.tempatTurun} • ${surat.jumlahAyat} Ayat`;
+            
+            nameArabicEl.textContent = surat.nama;
+            artiEl.textContent = surat.arti;
+
+            displayAyat(surat.ayat);
+            
+            loadingEl.style.display = 'none';
+            detailCard.style.display = 'block';
+        } catch (e) {
+            loadingEl.style.display = 'none';
+            errorText.textContent = 'Gagal memuat isi surat';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    function displayAyat(ayatArray) {
+        ayatListEl.innerHTML = '';
+        
+        // Add Bismillah if not At-Taubah and not Fatihah (Fatihah includes it)
+        if (nomorSurat !== 1 && nomorSurat !== 9) {
+            const bismillahDiv = document.createElement('div');
+            bismillahDiv.className = 'ayat-item';
+            bismillahDiv.style.textAlign = 'center';
+            bismillahDiv.innerHTML = '<div class="ayat-arabic" style="text-align: center; font-size: 2rem;">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ</div>';
+            ayatListEl.appendChild(bismillahDiv);
+        }
+
+        ayatArray.forEach(a => {
+            const div = document.createElement('div');
+            div.className = 'ayat-item';
+            div.innerHTML = `
+                <div class="ayat-top">
+                    <div class="ayat-number">${a.nomorAyat}</div>
+                    <div class="ayat-arabic">${a.teksArab}</div>
+                </div>
+                <div class="ayat-latin">${a.teksLatin}</div>
+                <div class="ayat-translation">${a.teksIndonesia}</div>
+            `;
+            ayatListEl.appendChild(div);
+        });
+    }
+
+    fetchDetailSurat();
+</script>
+{% endblock %}
