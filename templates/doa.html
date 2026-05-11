@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}Kumpulan Doa{% endblock %}
+
+{% block header_title %}Kumpulan Doa{% endblock %}
+{% block header_subtitle %}Doa harian & mustajab{% endblock %}
+
+{% block extra_css %}
+.search-wrapper {
+    margin-bottom: 1.5rem;
+}
+.search-input {
+    width: 100%;
+    padding: 0.9rem 1.25rem;
+    border: 1px solid rgba(16,185,129,0.4);
+    border-radius: 12px;
+    background: rgba(6, 78, 59, 0.6);
+    color: #ecfdf5;
+    font-size: 0.95rem;
+    font-family: 'Poppins', sans-serif;
+    transition: all 0.3s ease;
+}
+.search-input:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+}
+.doa-item {
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+.doa-item:hover {
+    background: rgba(16,185,129,0.15);
+    transform: translateY(-2px);
+}
+.doa-title {
+    font-weight: 500;
+    color: #ecfdf5;
+    font-size: 0.95rem;
+}
+.doa-detail {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(16,185,129,0.2);
+}
+.doa-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 1.6rem;
+    color: #10b981;
+    text-align: right;
+    line-height: 1.8;
+    margin-bottom: 1rem;
+}
+.doa-latin {
+    font-style: italic;
+    color: #6ee7b7;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+.doa-translation {
+    color: #d1fae5;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.doa-meta {
+    font-size: 0.7rem;
+    color: #6ee7b7;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #6ee7b7;
+    font-size: 0.9rem;
+}
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
+}
+.pagination-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 8px;
+    background: rgba(6, 78, 59, 0.4);
+    color: #6ee7b7;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.pagination-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+.pagination-info {
+    font-size: 0.85rem;
+    color: #a7f3d0;
+}
+{% endblock %}
+
+{% block content %}
+<div class="search-wrapper">
+    <input type="text" id="search-doa" class="search-input" placeholder="Cari doa...">
+</div>
+
+<div class="search-wrapper">
+    <div class="custom-select" id="grup-select-container">
+        <div class="select-trigger" id="grup-trigger">Semua Kategori</div>
+        <div class="select-dropdown" id="grup-dropdown">
+            <div class="select-search-wrapper">
+                <input type="text" class="select-search" id="grup-search" placeholder="Cari kategori...">
+            </div>
+            <div class="select-options" id="grup-options">
+                <div class="select-option selected" data-value="">Semua Kategori</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="doa-list"></div>
+
+<div id="pagination-container" class="pagination" style="display: none;">
+    <button id="prev-page" class="pagination-btn" disabled>Sebelumnya</button>
+    <div class="pagination-info" id="page-info">Halaman 1</div>
+    <button id="next-page" class="pagination-btn">Berikutnya</button>
+</div>
+
+<div id="loading" class="card">
+    <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Memuat daftar doa...</p>
+    </div>
+</div>
+
+<div id="error" class="card" style="display: none;">
+    <div class="error">
+        <p id="error-text"></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const doaListEl = document.getElementById('doa-list');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorText = document.getElementById('error-text');
+    const searchInput = document.getElementById('search-doa');
+    const grupTrigger = document.getElementById('grup-trigger');
+    const grupDropdown = document.getElementById('grup-dropdown');
+    const grupSearch = document.getElementById('grup-search');
+    const grupOptionsEl = document.getElementById('grup-options');
+    const paginationContainer = document.getElementById('pagination-container');
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
+    const pageInfo = document.getElementById('page-info');
+
+    let allDoa = [];
+    let filteredDoa = [];
+    let currentPage = 1;
+    let selectedGrup = '';
+    const itemsPerPage = 20;
+
+    async function fetchDoa() {
+        try {
+            const res = await fetch('https://equran.id/api/doa');
+            const result = await res.json();
+            allDoa = result.data || [];
+            
+            // Populate groups in custom select
+            const groups = [...new Set(allDoa.map(d => d.grup))].sort();
+            groups.forEach(g => {
+                const div = document.createElement('div');
+                div.className = 'select-option';
+                div.dataset.value = g;
+                div.textContent = g;
+                div.addEventListener('click', () => selectGrup(g));
+                grupOptionsEl.appendChild(div);
+            });
+
+            filteredDoa = [...allDoa];
+            updateDisplay();
+            loadingEl.style.display = 'none';
+        } catch (e) {
+            loadingEl.style.display = 'none';
+            errorText.textContent = 'Gagal memuat daftar doa';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    function updateDisplay() {
+        const totalPages = Math.ceil(filteredDoa.length / itemsPerPage);
+        if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+        
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const paginatedItems = filteredDoa.slice(start, end);
+        
+        displayDoa(paginatedItems);
+        updatePaginationUI(totalPages);
+    }
+
+    function updatePaginationUI(totalPages) {
+        if (filteredDoa.length > itemsPerPage) {
+            paginationContainer.style.display = 'flex';
+            pageInfo.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages;
+        } else {
+            paginationContainer.style.display = 'none';
+        }
+    }
+
+    function displayDoa(doaArray) {
+        doaListEl.innerHTML = '';
+        
+        if (doaArray.length === 0) {
+            doaListEl.innerHTML = '<div class="empty-state">Doa tidak ditemukan</div>';
+            return;
+        }
+
+        doaArray.forEach(doa => {
+            const card = document.createElement('div');
+            card.className = 'card doa-item';
+            card.innerHTML = `
+                <div class="doa-title">${doa.nama}</div>
+                <div class="doa-meta">${doa.grup}</div>
+                <div class="doa-detail">
+                    <div class="doa-arabic">${doa.ar}</div>
+                    <div class="doa-latin">${doa.tr}</div>
+                    <div class="doa-translation">${doa.idn}</div>
+                    ${doa.tentang ? `<div class="doa-meta" style="margin-top: 1rem; text-transform: none; opacity: 0.7;">Sumber: ${doa.tentang}</div>` : ''}
+                </div>
+            `;
+            
+            card.addEventListener('click', () => {
+                const detail = card.querySelector('.doa-detail');
+                const isVisible = detail.style.display === 'block';
+                
+                // Close all others in current view
+                document.querySelectorAll('.doa-detail').forEach(d => d.style.display = 'none');
+                
+                detail.style.display = isVisible ? 'none' : 'block';
+            });
+            
+            doaListEl.appendChild(card);
+        });
+        
+        // Scroll to top of list when changing page
+        if (currentPage > 1 || searchInput.value) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function applyFilters() {
+        const query = searchInput.value.toLowerCase();
+        
+        filteredDoa = allDoa.filter(doa => {
+            const matchesSearch = doa.nama.toLowerCase().includes(query) || 
+                                 doa.grup.toLowerCase().includes(query);
+            const matchesGrup = !selectedGrup || doa.grup === selectedGrup;
+            return matchesSearch && matchesGrup;
+        });
+        
+        currentPage = 1;
+        updateDisplay();
+    }
+
+    // Custom Select Logic
+    grupTrigger.addEventListener('click', () => {
+        grupDropdown.classList.toggle('show');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#grup-select-container')) {
+            grupDropdown.classList.remove('show');
+        }
+    });
+
+    grupSearch.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const options = grupOptionsEl.querySelectorAll('.select-option');
+        options.forEach(opt => {
+            const text = opt.textContent.toLowerCase();
+            opt.style.display = text.includes(query) ? 'block' : 'none';
+        });
+    });
+
+    function selectGrup(value) {
+        selectedGrup = value;
+        grupTrigger.textContent = value || 'Semua Kategori';
+        
+        // Update selection UI
+        grupOptionsEl.querySelectorAll('.select-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.value === value);
+        });
+        
+        grupDropdown.classList.remove('show');
+        applyFilters();
+    }
+
+    // Default "Semua Kategori" option
+    grupOptionsEl.querySelector('[data-value=""]').addEventListener('click', () => selectGrup(''));
+
+    searchInput.addEventListener('input', applyFilters);
+
+    prevBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            updateDisplay();
+        }
+    });
+
+    nextBtn.addEventListener('click', () => {
+        const totalPages = Math.ceil(filteredDoa.length / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            updateDisplay();
+        }
+    });
+
+    fetchDoa();
+</script>
+{% endblock %}
