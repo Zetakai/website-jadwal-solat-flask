@@ -71,6 +71,7 @@
             opacity: 0.8;
         }
         .card {
+            position: relative;
             background: rgba(6, 78, 59, 0.4);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(16,185,129,0.3);
@@ -197,6 +198,10 @@
         .custom-select {
             position: relative;
             width: 100%;
+        }
+        .card:has(.select-dropdown.show),
+        .search-wrapper:has(.select-dropdown.show) {
+            z-index: 1200;
         }
         .select-trigger {
             width: 100%;
