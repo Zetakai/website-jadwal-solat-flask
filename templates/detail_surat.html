@@ -138,7 +138,7 @@
 
     async function fetchDetailSurat() {
         try {
-            const res = await fetch(`https://equran.id/api/v2/surat/${nomorSurat}`);
+            const res = await fetch(`/api/surat/${nomorSurat}`);
             const data = await res.json();
             const surat = data.data;
 

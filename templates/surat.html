@@ -151,7 +151,7 @@
 
     async function fetchSurat() {
         try {
-            const res = await fetch('https://equran.id/api/v2/surat');
+            const res = await fetch('/api/surat');
             const data = await res.json();
             allSurat = data.data || [];
             applyFilters();

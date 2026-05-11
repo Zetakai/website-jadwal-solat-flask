@@ -78,5 +78,32 @@ def get_schedule():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/doa")
+def get_doa():
+    try:
+        response = requests.get(f"{API_BASE}/api/doa")
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/surat")
+def get_surat():
+    try:
+        response = requests.get(f"{API_BASE}/api/v2/surat")
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/surat/<int:nomor>")
+def get_detail_surat(nomor):
+    try:
+        response = requests.get(f"{API_BASE}/api/v2/surat/{nomor}")
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
