@@ -1,6 +1,6 @@
 # Virtual environment
 venv/
-.env
+# .env sengaja di-commit (proyek belajar). Jangan tiru di produksi.
 
 # Python
 __pycache__/
