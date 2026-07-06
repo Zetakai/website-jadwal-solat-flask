@@ -114,6 +114,21 @@
     padding: 0.5rem 0.8rem; margin-bottom: 1rem; font-size: 0.78rem; color: #6ee7b7;
 }
 .reading-bar .prog { flex: 1; }
+.surat-nav {
+    display: flex; gap: 0.6rem; margin-top: 1.5rem;
+    padding-top: 1.5rem; border-top: 1px solid rgba(16,185,129,0.15);
+}
+.surat-nav a {
+    flex: 1; display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.85rem 1rem; border-radius: 12px; text-decoration: none;
+    background: rgba(6,78,59,0.6); border: 1px solid rgba(16,185,129,0.35);
+    color: #d1fae5; transition: all 0.2s ease;
+}
+.surat-nav a:hover { background: rgba(16,185,129,0.15); }
+.surat-nav a.next { justify-content: flex-end; text-align: right; }
+.surat-nav svg { width: 18px; height: 18px; fill: #10b981; flex-shrink: 0; }
+.surat-nav .lbl { font-size: 0.65rem; color: #6ee7b7; text-transform: uppercase; letter-spacing: 0.05em; }
+.surat-nav .nm { font-weight: 600; font-size: 0.9rem; }
 {% endblock %}
 
 {% block content %}
@@ -137,6 +152,7 @@
         <span id="reading-juz"></span>
     </div>
     <div id="ayat-list"></div>
+    <div class="surat-nav" id="surat-nav"></div>
 </div>
 
 <div id="loading" class="card">
@@ -181,7 +197,8 @@
             artiEl.textContent = surat.arti;
 
             displayAyat(surat.ayat);
-            
+            renderSuratNav(surat.suratSebelumnya, surat.suratSelanjutnya);
+
             loadingEl.style.display = 'none';
             detailCard.style.display = 'block';
         } catch (e) {
@@ -189,6 +206,24 @@
             errorText.textContent = 'Gagal memuat isi surat';
             errorEl.style.display = 'block';
         }
+    }
+
+    // Navigasi surat sebelumnya/selanjutnya. equran memberi objek, atau
+    // false/null di batas (surat 1 tanpa sebelumnya, 114 tanpa selanjutnya).
+    function renderSuratNav(prev, next) {
+        const nav = document.getElementById('surat-nav');
+        let html = '';
+        if (prev && prev.nomor) {
+            html += `<a class="prev" href="/surat/${prev.nomor}">
+                <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                <div><div class="lbl">Sebelumnya</div><div class="nm">${prev.namaLatin}</div></div></a>`;
+        }
+        if (next && next.nomor) {
+            html += `<a class="next" href="/surat/${next.nomor}">
+                <div><div class="lbl">Selanjutnya</div><div class="nm">${next.namaLatin}</div></div>
+                <svg viewBox="0 0 24 24"><path d="M4 11h12.17l-5.59-5.59L12 4l8 8-8 8-1.41-1.41L16.17 13H4v-2z"/></svg></a>`;
+        }
+        nav.innerHTML = html;
     }
 
     function displayAyat(ayatArray) {
