@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Zikir{% endblock %}
+{% block header_title %}Tasbih Digital{% endblock %}
+{% block header_subtitle %}Hitung zikir harian Anda{% endblock %}
+
+{% block extra_css %}
+.zikir-tabs { display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.4rem; margin-bottom:1rem; }
+.zikir-tab { flex:0 0 auto; padding:0.5rem 0.9rem; border-radius:20px; background:rgba(6,78,59,0.5);
+    border:1px solid rgba(16,185,129,0.3); color:#a7f3d0; font-size:0.8rem; cursor:pointer; white-space:nowrap; }
+.zikir-tab.active { background:linear-gradient(135deg,#10b981,#059669); color:#022c22; font-weight:600; }
+.counter-card { text-align:center; padding:2rem 1.25rem; }
+.sel-date { color:#6ee7b7; font-size:0.8rem; margin-bottom:0.75rem; }
+.counter-arabic { font-family:'Amiri',serif; font-size:2.2rem; color:#ecfdf5; margin-bottom:0.25rem; }
+.counter-label { color:#6ee7b7; font-size:0.85rem; margin-bottom:1.5rem; }
+.counter-value { font-size:4rem; font-weight:700; color:#10b981; line-height:1; }
+.counter-target { color:#6ee7b7; font-size:0.9rem; margin:0.5rem 0 1.5rem; }
+.tap-btn { width:150px; height:150px; border-radius:50%; margin:0 auto 1.25rem;
+    background:linear-gradient(135deg,#10b981,#059669); border:none; color:#022c22;
+    font-size:1rem; font-weight:700; cursor:pointer; box-shadow:0 0 40px rgba(16,185,129,0.4);
+    display:flex; align-items:center; justify-content:center; transition:transform 0.1s ease; }
+.tap-btn:active { transform:scale(0.94); }
+.counter-actions { display:flex; gap:0.6rem; }
+.readonly-note { color:#6ee7b7; font-size:0.8rem; }
+
+/* Kalender */
+.cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
+.cal-head button { background:rgba(6,78,59,0.6); border:1px solid rgba(16,185,129,0.4); color:#ecfdf5;
+    width:34px;height:34px;border-radius:10px; cursor:pointer; font-size:1.1rem; }
+.cal-title { font-weight:600; color:#ecfdf5; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.cal-dow { text-align:center; font-size:0.65rem; color:#6ee7b7; padding:0.25rem 0; }
+.cal-cell { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; font-size:0.8rem; color:#d1fae5; background:rgba(6,78,59,0.35);
+    border:1px solid transparent; cursor:pointer; }
+.cal-cell.empty { background:none; cursor:default; }
+.cal-cell.active { background:rgba(16,185,129,0.3); color:#ecfdf5; font-weight:600; }
+.cal-cell.full { background:rgba(234,179,8,0.35); color:#fde68a; font-weight:700; }
+.target-wrap { max-width:240px; margin:0 auto 1.25rem; }
+.target-wrap .cap { display:flex; justify-content:space-between; font-size:0.75rem; color:#6ee7b7; margin-bottom:0.3rem; }
+.target-done { color:#fde68a; font-weight:600; }
+.cal-cell.future { opacity:0.35; cursor:not-allowed; }
+.cal-cell.today { border-color:#10b981; }
+.cal-cell.selected { outline:2px solid #34d399; }
+.cal-cell .dot { font-size:0.5rem; margin-top:1px; opacity:0.85; }
+{% endblock %}
+
+{% block content %}
+<div class="content-grid">
+<div class="col-full zikir-tabs" id="zikir-tabs">
+    {% for z in zikir_types %}
+    <div class="zikir-tab {% if loop.first %}active{% endif %}" data-key="{{ z.key }}"
+         data-arabic="{{ z.arabic }}" data-label="{{ z.label }}" data-target="{{ z.target }}">{{ z.label }}</div>
+    {% endfor %}
+</div>
+
+<div class="card counter-card">
+    <div class="sel-date" id="sel-date"></div>
+    <div class="counter-arabic" id="c-arabic"></div>
+    <div class="counter-label" id="c-label"></div>
+    <div class="counter-value" id="c-value">0</div>
+    <div class="target-wrap">
+        <div class="cap"><span id="c-target">Target</span><span id="c-target-state"></span></div>
+        <div class="progress-track"><div class="progress-fill" id="c-target-bar" style="width:0%"></div></div>
+    </div>
+    <div id="edit-controls">
+        <button class="tap-btn" id="tap-btn">TAP</button>
+        <div class="counter-actions">
+            <button class="btn btn-ghost" id="minus-btn">−1</button>
+            <button class="btn btn-danger" id="reset-btn">Reset</button>
+        </div>
+    </div>
+    <div class="readonly-note" id="readonly-note" style="display:none;">Riwayat — hanya hari ini yang bisa ditambah.</div>
+</div>
+
+<div class="card">
+    <div class="card-title">Total (tanggal terpilih)</div>
+    <div id="totals" style="font-size:0.85rem;color:#d1fae5;line-height:1.8;"></div>
+</div>
+
+<div class="card">
+    <div class="cal-head">
+        <button id="prev">‹</button>
+        <span class="cal-title" id="cal-title"></span>
+        <button id="next">›</button>
+    </div>
+    <div class="cal-grid" id="cal-dow"></div>
+    <div class="cal-grid" id="cal-grid" style="margin-top:4px;"></div>
+    <div style="font-size:0.7rem;color:#6ee7b7;opacity:0.75;margin-top:0.6rem;">Angka = total zikir hari itu.</div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tabs = [...document.querySelectorAll('.zikir-tab')];
+const el = id => document.getElementById(id);
+const DOW = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+const today = new Date();
+const todayIso = toIso(today);
+let selected = todayIso;
+let active = tabs[0].dataset.key;
+let counts = {};                 // counts tanggal terpilih
+let monthTotals = {};
+let calYear = today.getFullYear(), calMonth = today.getMonth() + 1;
+
+function toIso(d) { return d.toISOString().slice(0, 10); }
+function pad(n) { return String(n).padStart(2, '0'); }
+function activeTab() { return tabs.find(t => t.dataset.key === active); }
+const isToday = () => selected === todayIso;
+
+async function loadCounts() {
+    const d = new Date(selected + 'T00:00:00');
+    el('sel-date').textContent = DOW[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN[d.getMonth()] + ' ' + d.getFullYear()
+        + (isToday() ? ' (Hari ini)' : '');
+    const res = await fetch('/api/me/zikir?date=' + selected);
+    counts = (await res.json()).counts || {};
+    el('edit-controls').style.display = isToday() ? 'block' : 'none';
+    el('readonly-note').style.display = isToday() ? 'none' : 'block';
+    render();
+}
+
+const GOAL = tabs.reduce((s, t) => s + (+t.dataset.target), 0);   // total target harian
+
+function render() {
+    const t = activeTab();
+    const val = counts[active] || 0;
+    const target = +t.dataset.target;
+    el('c-arabic').textContent = t.dataset.arabic;
+    el('c-label').textContent = t.dataset.label;
+    el('c-value').textContent = val;
+    el('c-target').textContent = val + ' / ' + target;
+    el('c-target-bar').style.width = Math.min(100, val / target * 100) + '%';
+    el('c-target-state').innerHTML = val >= target ? '<span class="target-done">✓ Tercapai</span>' : '';
+    el('totals').innerHTML = tabs.map(x =>
+        `${x.dataset.label}: <b style="color:#10b981">${counts[x.dataset.key] || 0}</b>`).join('<br>');
+}
+
+async function change(step) {
+    if (!isToday()) return;
+    const res = await fetch('/api/me/zikir/' + active, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step })
+    });
+    counts[active] = (await res.json()).count;
+    if (step > 0 && navigator.vibrate) navigator.vibrate(15);
+    render(); refreshTodayInCalendar();
+}
+
+function refreshTodayInCalendar() {
+    monthTotals[selected] = tabs.reduce((s, x) => s + (counts[x.dataset.key] || 0), 0);
+    if (calYear === +selected.slice(0,4) && calMonth === +selected.slice(5,7)) renderCalendar();
+}
+
+// --- Kalender ---
+async function loadCalendar() {
+    const res = await fetch(`/api/me/zikir/history?year=${calYear}&month=${calMonth}`);
+    monthTotals = (await res.json()).days || {};
+    renderCalendar();
+}
+
+function renderCalendar() {
+    el('cal-title').textContent = BULAN[calMonth - 1] + ' ' + calYear;
+    el('cal-dow').innerHTML = DOW.map(d => `<div class="cal-dow">${d}</div>`).join('');
+    const first = new Date(calYear, calMonth - 1, 1);
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+    const grid = el('cal-grid');
+    grid.innerHTML = '';
+    for (let i = 0; i < first.getDay(); i++)
+        grid.insertAdjacentHTML('beforeend', '<div class="cal-cell empty"></div>');
+    for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${calYear}-${pad(calMonth)}-${pad(day)}`;
+        const total = monthTotals[iso] || 0;
+        const isFuture = iso > todayIso;
+        const cls = ['cal-cell'];
+        if (isFuture) cls.push('future');
+        else if (total >= GOAL) cls.push('full');
+        else if (total > 0) cls.push('active');
+        if (iso === todayIso) cls.push('today');
+        if (iso === selected) cls.push('selected');
+        const cell = document.createElement('div');
+        cell.className = cls.join(' ');
+        cell.innerHTML = `${day}${!isFuture && total ? `<span class="dot">${total}</span>` : ''}`;
+        if (!isFuture) cell.addEventListener('click', () => { selected = iso; loadCounts(); renderCalendar(); });
+        grid.appendChild(cell);
+    }
+}
+
+tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    active = t.dataset.key;
+    render();
+}));
+
+el('tap-btn').addEventListener('click', () => change(1));
+el('minus-btn').addEventListener('click', () => change(-1));
+el('reset-btn').addEventListener('click', async () => {
+    if (!isToday() || !confirm('Reset hitungan ' + activeTab().dataset.label + '?')) return;
+    const res = await fetch('/api/me/zikir/' + active, { method: 'DELETE' });
+    counts[active] = (await res.json()).count;
+    render(); refreshTodayInCalendar();
+});
+
+el('prev').addEventListener('click', () => { calMonth--; if (calMonth < 1) { calMonth = 12; calYear--; } loadCalendar(); });
+el('next').addEventListener('click', () => { calMonth++; if (calMonth > 12) { calMonth = 1; calYear++; } loadCalendar(); });
+
+loadCounts();
+loadCalendar();
+</script>
+{% endblock %}

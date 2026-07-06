@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Masuk{% endblock %}
+{% block header_title %}Masuk{% endblock %}
+{% block header_subtitle %}Lanjutkan ibadah Anda{% endblock %}
+
+{% block content %}
+<div class="card">
+    <form method="post" action="{{ url_for('auth.login') }}">
+        {{ form.hidden_tag() }}
+        <div class="field">
+            {{ form.email.label }}
+            {{ form.email(placeholder="nama@email.com") }}
+            {% for e in form.email.errors %}<div class="err">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="field">
+            {{ form.password.label }}
+            {{ form.password(placeholder="••••••••") }}
+            {% for e in form.password.errors %}<div class="err">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:0.5rem;">
+            {{ form.remember() }} {{ form.remember.label }}
+        </div>
+        <button type="submit" class="btn btn-primary">Masuk</button>
+    </form>
+    <div class="form-link">Belum punya akun? <a href="{{ url_for('auth.register') }}">Daftar</a></div>
+</div>
+{% endblock %}

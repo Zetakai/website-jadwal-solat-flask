@@ -86,9 +86,31 @@
 .select-group:last-child {
     margin-bottom: 0;
 }
+.hijri { color:#6ee7b7; font-size:0.78rem; margin-top:0.15rem; opacity:0.9; }
+.next-banner { background:linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.15));
+    border:1px solid rgba(16,185,129,0.4); border-radius:14px; padding:0.9rem 1rem; margin-bottom:1.25rem;
+    display:flex; align-items:center; justify-content:space-between; }
+.next-banner .lbl { font-size:0.72rem; color:#6ee7b7; text-transform:uppercase; letter-spacing:0.05em; }
+.next-banner .nm { font-size:1.1rem; font-weight:700; color:#ecfdf5; }
+.next-banner .cd { font-family:'Amiri',serif; font-size:1.5rem; font-weight:700; color:#10b981; }
+.prayer-item.current { background:rgba(16,185,129,0.14); margin:0 -0.75rem; padding-left:0.75rem;
+    padding-right:0.75rem; border-radius:10px; }
+.prayer-item.current .prayer-label::after { content:' • sekarang'; color:#6ee7b7; font-size:0.7rem; font-weight:400; }
 {% endblock %}
 
 {% block content %}
+<div class="card">
+    <div class="card-title">Fitur</div>
+    <div class="feature-grid">
+        <a class="feature-tile" href="/surat"><span class="emoji">📖</span>Al-Qur'an</a>
+        <a class="feature-tile" href="/doa"><span class="emoji">🤲</span>Doa</a>
+        <a class="feature-tile" href="/zikir"><span class="emoji">📿</span>Zikir</a>
+        <a class="feature-tile" href="/ibadah"><span class="emoji">✅</span>Ceklis Shalat</a>
+        <a class="feature-tile" href="/masjid?mode=kiblat"><span class="emoji">🧭</span>Kiblat</a>
+        <a class="feature-tile" href="/masjid"><span class="emoji">🕌</span>Masjid</a>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-title">
         <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -132,6 +154,14 @@
     <div class="schedule-info">
         <div class="location" id="location-text"></div>
         <div class="date" id="date-text"></div>
+        <div class="hijri" id="hijri-text"></div>
+    </div>
+    <div class="next-banner" id="next-banner" style="display:none;">
+        <div>
+            <div class="lbl">Shalat berikutnya</div>
+            <div class="nm" id="next-name">—</div>
+        </div>
+        <div class="cd" id="next-countdown">--:--:--</div>
     </div>
     <div id="prayer-list"></div>
 </div>
@@ -170,8 +200,34 @@
     const locationText = document.getElementById('location-text');
     const dateText = document.getElementById('date-text');
 
+    const LOGGED_IN = {{ 'true' if current_user.is_authenticated else 'false' }};
     let selectedProvince = '';
     let selectedCity = '';
+
+    async function saveLocation(provinsi, kabkota) {
+        try {
+            await fetch('/api/me/location', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provinsi, kabkota })
+            });
+        } catch (e) { /* diamkan: penyimpanan lokasi bersifat opsional */ }
+    }
+
+    async function restoreLocation() {
+        if (!LOGGED_IN) return;
+        try {
+            const res = await fetch('/api/me/location');
+            const loc = await res.json();
+            if (!loc.provinsi) return;
+            selectedProvince = loc.provinsi;
+            provinceTrigger.textContent = loc.provinsi;
+            provinceOptionsEl.querySelectorAll('.select-option').forEach(opt =>
+                opt.classList.toggle('selected', opt.dataset.value === loc.provinsi));
+            await fetchCities(loc.provinsi);
+            if (loc.kabkota) selectCity(loc.kabkota);
+        } catch (e) { /* abaikan */ }
+    }
 
     const prayerEmoji = {
         'Subuh': '🌙',
@@ -302,6 +358,7 @@
         
         if (c) {
             fetchSchedule(selectedProvince, c);
+            if (LOGGED_IN) saveLocation(selectedProvince, c);
         } else {
             hideError();
             hideSchedule();
@@ -339,6 +396,8 @@
         }
     }
 
+    let countdownTimer = null;
+
     function displaySchedule(schedule, provinsi, kabkota) {
         hideLoading();
 
@@ -351,6 +410,13 @@
         locationText.textContent = `${kabkota}, ${provinsi}`;
         dateText.textContent = `${hari}, ${tgl} ${bulan} ${tahun}`;
 
+        // Tanggal Hijriah — kalender Islam bawaan browser (tanpa API luar).
+        try {
+            const hijri = new Intl.DateTimeFormat('id-u-ca-islamic-umalqura',
+                { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+            document.getElementById('hijri-text').textContent = hijri.replace('AH', 'H');
+        } catch (e) { document.getElementById('hijri-text').textContent = ''; }
+
         prayerList.innerHTML = '';
 
         const prayers = [
@@ -361,9 +427,10 @@
             { name: 'Isya', time: schedule.isya }
         ];
 
-        prayers.forEach(p => {
+        prayers.forEach((p, i) => {
             const div = document.createElement('div');
             div.className = 'prayer-item';
+            div.dataset.idx = i;
             div.innerHTML = `
                 <div class="prayer-left">
                     <div class="prayer-icon">${prayerEmoji[p.name]}</div>
@@ -375,6 +442,49 @@
         });
 
         scheduleCard.style.display = 'block';
+        startCountdown(prayers);
+    }
+
+    // Ubah "HH:MM" hari ini menjadi objek Date.
+    function timeToDate(hhmm, dayOffset = 0) {
+        const [h, m] = hhmm.split(':').map(Number);
+        const d = new Date();
+        d.setDate(d.getDate() + dayOffset);
+        d.setHours(h, m, 0, 0);
+        return d;
+    }
+
+    function startCountdown(prayers) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        const banner = document.getElementById('next-banner');
+        const nameEl = document.getElementById('next-name');
+        const cdEl = document.getElementById('next-countdown');
+
+        function tick() {
+            const now = new Date();
+            let nextIdx = prayers.findIndex(p => timeToDate(p.time) > now);
+            let target, currentIdx;
+            if (nextIdx === -1) {                 // sudah lewat Isya → Subuh besok
+                target = timeToDate(prayers[0].time, 1);
+                nextIdx = 0; currentIdx = 4;
+            } else {
+                target = timeToDate(prayers[nextIdx].time);
+                currentIdx = nextIdx - 1;
+            }
+            nameEl.textContent = prayers[nextIdx].name;
+            banner.style.display = 'flex';
+
+            document.querySelectorAll('.prayer-item').forEach(el =>
+                el.classList.toggle('current', +el.dataset.idx === currentIdx));
+
+            let diff = Math.max(0, Math.floor((target - now) / 1000));
+            const hh = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const mm = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const ss = String(diff % 60).padStart(2, '0');
+            cdEl.textContent = `${hh}:${mm}:${ss}`;
+        }
+        tick();
+        countdownTimer = setInterval(tick, 1000);
     }
 
     function showLoading() {
@@ -402,6 +512,6 @@
         scheduleCard.style.display = 'none';
     }
 
-    fetchProvinces();
+    fetchProvinces().then(restoreLocation);
 </script>
 {% endblock %}

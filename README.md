@@ -17,7 +17,7 @@ Tema website ini adalah layanan Islami digital. Website menyediakan informasi ib
 
 ## API yang Digunakan
 
-Website ini menggunakan API dari [equran.id](https://equran.id). Semua request dari frontend diarahkan ke endpoint lokal Flask di `app.py`, lalu backend meneruskan request ke API equran.id.
+Website ini menggunakan API dari [equran.id](https://equran.id). Semua request dari frontend diarahkan ke endpoint lokal Flask (blueprint `app/blueprints/api.py`), lalu backend meneruskan request ke API equran.id. Peta masjid memakai [OpenStreetMap](https://www.openstreetmap.org) via Overpass API (tanpa API key).
 
 Endpoint lokal yang digunakan frontend:
 
@@ -39,67 +39,108 @@ Endpoint equran.id yang dipanggil oleh backend:
 
 ## Fitur
 
-- Pilihan provinsi dan kabupaten/kota
-- Jadwal shalat harian otomatis sesuai tanggal hari ini
-- Daftar doa harian dengan pencarian dan kategori
-- Daftar surat Al-Qur'an dengan fitur pencarian
-- Filter surat pendek
-- Detail surat berisi ayat Arab, latin, dan terjemahan Indonesia
-- UI modern dengan tema hijau Islami
-- Responsive design
+**Publik (tanpa login):**
+- Jadwal shalat harian per provinsi/kabupaten
+- Kumpulan doa harian dengan pencarian dan kategori
+- Al-Qur'an digital (Arab, latin, terjemahan) + filter surat pendek
+- Halaman **Peta** dengan dua mode:
+  - **Masjid** — peta masjid sekitar (OpenStreetMap/Overpass) + daftar jarak
+  - **Kiblat** — kompas arah kiblat + garis great-circle ke Ka'bah di peta
+- Lokasi bisa via GPS, pencarian tempat (Nominatim), seret penanda, atau klik peta
+
+**Perlu login (data per pengguna):**
+- Simpan lokasi favorit → jadwal termuat otomatis
+- Progres baca Al-Qur'an: posisi baca terakhir + persen khatam
+- Tasbih/zikir digital + kalender riwayat harian
+- Ceklis shalat lima waktu + **kalender bulanan** (tandai shalat terlewat)
+- **Streak, statistik & lencana** (gamifikasi) di halaman profil
+- Home: **hitung mundur shalat berikutnya** + sorot waktu sekarang + **tanggal Hijriah**
+
+UI modern tema hijau Islami, responsif — mode mobile (bottom nav) & desktop (top nav).
+Tanggal Hijriah pakai kalender Islam bawaan browser (`Intl`), tanpa API eksternal.
 
 ## Penjelasan Fitur
 
-1. **Jadwal Shalat**
-   Pengguna dapat memilih provinsi dan kabupaten/kota, lalu website akan menampilkan jadwal shalat hari ini untuk lokasi tersebut.
+1. **Jadwal Shalat** — pilih provinsi/kota, tampil jadwal hari ini. Pengguna login dapat menyimpan lokasi agar termuat otomatis.
 
-2. **Kumpulan Doa**
-   Website menampilkan daftar doa dari API equran.id. Pengguna dapat mencari doa berdasarkan kata kunci, memilih kategori doa, membuka detail doa, dan melihat teks Arab, latin, serta terjemahannya.
+2. **Kumpulan Doa** — daftar doa dari equran.id dengan pencarian, kategori, dan detail (Arab/latin/terjemahan).
 
-3. **Al-Qur'an Digital**
-   Website menyediakan daftar surat Al-Qur'an. Pengguna dapat mencari surat berdasarkan nama atau arti, memfilter surat pendek, dan membuka detail surat untuk membaca ayat Arab, latin, serta terjemahan Indonesia.
+3. **Al-Qur'an Digital** — daftar surat + pencarian & filter surat pendek. Pengguna login: simpan posisi baca terakhir dan tandai surat khatam (progres persen).
 
-4. **Tampilan Responsif**
-   Antarmuka dibuat responsif sehingga dapat digunakan pada layar desktop maupun perangkat mobile.
+4. **Peta (Masjid & Kiblat)** — satu halaman, dua mode. Masjid: cari masjid di radius 3 km. Kiblat: kompas sensor perangkat + garis kiblat ke Ka'bah.
+
+5. **Zikir** — tasbih digital, hitungan tersimpan per hari.
+
+6. **Ceklis Shalat** — centang 5 waktu; kalender menandai hari lengkap/sebagian/terlewat, bisa mundur ke tanggal lampau.
+
+7. **Akun** — daftar/masuk (email + kata sandi), halaman profil merangkum progres.
+
+8. **Responsif** — layout menyesuaikan mobile dan desktop.
 
 ## Tech Stack
 
-- **Backend**: Flask (Python)
-- **Frontend**: HTML, CSS, JavaScript
+- **Backend**: Flask (application factory + blueprints)
+- **Database**: SQLAlchemy (SQLite default, siap Postgres) + Flask-Migrate
+- **Auth**: Flask-Login + Werkzeug password hashing, Flask-WTF (CSRF)
+- **Frontend**: HTML, CSS, JavaScript (tanpa build step)
+- **Peta**: Leaflet + OpenStreetMap (tiles, Overpass masjid, Nominatim pencarian)
 - **API eksternal**: [equran.id](https://equran.id)
-- **API lokal**: Route Flask di `app.py`
 
 ## Setup
 
 ```bash
-# Buat virtual environment
 python3 -m venv venv
-
-# Aktifkan virtual environment
-source venv/bin/activate  # Linux/Mac
-# atau
-.\venv\Scripts\activate   # Windows
-
-# Install dependencies
+source venv/bin/activate            # Windows: .\venv\Scripts\activate
 pip install -r requirements.txt
 
-# Jalankan aplikasi
-python app.py
+cp .env.example .env                # isi SECRET_KEY (wajib)
+
+flask --app run db upgrade          # buat/migrasi database
+flask --app run run                 # atau: python run.py
 ```
 
-Buka browser di `http://127.0.0.1:5000`
+Buka browser di `http://127.0.0.1:5000`.
 
-## Project Structure
+> Fitur kiblat & peta masjid butuh izin lokasi/sensor browser dan idealnya
+> diakses via HTTPS (atau `localhost`).
+
+## API Lokal
+
+Proxy publik (`app/blueprints/api.py`): `/api/provinces`, `/api/cities`,
+`/api/schedule`, `/api/doa`, `/api/surat`, `/api/surat/<nomor>`.
+
+Fitur per-pengguna, perlu login (`app/blueprints/tracker.py`, prefix `/api/me`) —
+CRUD penuh:
+
+| Resource | Method + path |
+|----------|---------------|
+| Lokasi   | `GET/PUT/DELETE /location` |
+| Progres Qur'an | `GET/PUT /quran/progress` |
+| Khatam surat | `POST/DELETE /quran/reads/<no>` |
+| Zikir | `GET /zikir`, `POST/DELETE /zikir/<key>`, `GET /zikir/history?year=&month=` |
+| Ceklis shalat | `GET/PUT /prayer`, `GET /prayer/history?year=&month=` |
+| Statistik | `GET /stats` (streak, total, mingguan) |
+
+## Struktur Proyek
 
 ```
-├── app.py              # Flask backend
-├── requirements.txt    # Python dependencies
-├── templates/
-│   ├── base.html
-│   ├── index.html
-│   ├── doa.html
-│   ├── surat.html
-│   └── detail_surat.html
+├── run.py                  # entrypoint (create_app)
+├── requirements.txt
+├── .env.example
+├── migrations/             # Alembic (Flask-Migrate)
+├── app/
+│   ├── __init__.py         # application factory
+│   ├── config.py           # konfigurasi via environment
+│   ├── extensions.py       # db, login_manager, migrate, csrf
+│   ├── models.py           # User, QuranProgress, SuratRead, ZikirLog, PrayerLog
+│   ├── forms.py            # form login/daftar (WTForms)
+│   └── blueprints/
+│       ├── main.py         # halaman
+│       ├── auth.py         # daftar/masuk/keluar
+│       ├── api.py          # proxy equran.id (publik)
+│       └── tracker.py      # fitur per-pengguna (perlu login)
+├── templates/              # base, index, doa, surat, detail_surat,
+│                           #   zikir, ibadah, masjid (peta+kiblat), profile, auth/
 ├── .gitignore
 └── README.md
 ```

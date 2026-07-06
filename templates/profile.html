@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Akun{% endblock %}
+{% block header_title %}{{ current_user.name }}{% endblock %}
+{% block header_subtitle %}{{ current_user.email }}{% endblock %}
+
+{% block extra_css %}
+.stat-row { display:flex; justify-content:space-between; padding:0.6rem 0; font-size:0.88rem;
+    border-bottom:1px solid rgba(16,185,129,0.12); }
+.stat-row:last-child { border-bottom:none; }
+.stat-row .k { color:#6ee7b7; }
+.stat-row .v { color:#ecfdf5; font-weight:600; }
+
+.stat-tiles { display:grid; grid-template-columns:repeat(2,1fr); gap:0.6rem; }
+.stat-tile { background:rgba(6,78,59,0.5); border:1px solid rgba(16,185,129,0.25); border-radius:14px;
+    padding:0.9rem; text-align:center; }
+.stat-tile .num { font-size:1.8rem; font-weight:700; color:#10b981; line-height:1; }
+.stat-tile .lbl { font-size:0.72rem; color:#6ee7b7; margin-top:0.35rem; }
+.stat-tile .ic { font-size:1.1rem; }
+.badges { display:flex; flex-wrap:wrap; gap:0.5rem; }
+.badge { display:flex; align-items:center; gap:0.4rem; padding:0.45rem 0.8rem; border-radius:20px;
+    font-size:0.78rem; font-weight:600; }
+.badge.on { background:linear-gradient(135deg,#10b981,#059669); color:#022c22; }
+.badge.off { background:rgba(6,78,59,0.5); border:1px dashed rgba(16,185,129,0.35); color:#6ee7b7; opacity:0.7; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">Statistik</div>
+    <div class="stat-tiles">
+        <div class="stat-tile"><div class="num"><span class="ic">🔥</span> <span id="s-prayer-streak">0</span></div><div class="lbl">Streak Shalat (hari)</div></div>
+        <div class="stat-tile"><div class="num"><span class="ic">📿</span> <span id="s-zikir-streak">0</span></div><div class="lbl">Streak Zikir (hari)</div></div>
+        <div class="stat-tile"><div class="num" id="s-zikir-total">0</div><div class="lbl">Total Zikir</div></div>
+        <div class="stat-tile"><div class="num" id="s-prayer-days">0</div><div class="lbl">Hari Shalat Lengkap</div></div>
+    </div>
+    <div style="margin-top:1rem;">
+        <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#6ee7b7;margin-bottom:0.4rem;">
+            <span>Shalat minggu ini</span><span id="s-week-txt">0/35</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="s-week-bar" style="width:0%"></div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">Lencana</div>
+    <div class="badges" id="badges"></div>
+</div>
+
+<div class="card">
+    <div class="card-title">Progres Al-Qur'an</div>
+    <div class="stat-row"><span class="k">Surat dikhatam</span><span class="v" id="reads">—</span></div>
+    <div class="stat-row"><span class="k">Terakhir dibaca</span><span class="v" id="last">—</span></div>
+    <div class="progress-track" style="margin-top:0.8rem;"><div class="progress-fill" id="bar" style="width:0%"></div></div>
+    <div style="text-align:center;color:#6ee7b7;font-size:0.8rem;margin-top:0.5rem;" id="pct">0%</div>
+    <a href="#" id="resume" class="btn btn-ghost" style="margin-top:1rem;display:none;">Lanjutkan Membaca</a>
+</div>
+
+<div class="card">
+    <div class="card-title">Lokasi Tersimpan</div>
+    <div id="loc" style="color:#d1fae5;font-size:0.88rem;">Belum diatur</div>
+    <a href="/" class="btn btn-ghost" style="margin-top:0.8rem;">Ubah di Jadwal</a>
+</div>
+
+<div class="card">
+    <div class="card-title">Fitur</div>
+    <div class="feature-grid">
+        <a class="feature-tile" href="/ibadah"><span class="emoji">✅</span>Ceklis Shalat</a>
+        <a class="feature-tile" href="/zikir"><span class="emoji">📿</span>Zikir</a>
+        <a class="feature-tile" href="/masjid?mode=kiblat"><span class="emoji">🧭</span>Kiblat</a>
+        <a class="feature-tile" href="/masjid"><span class="emoji">🕌</span>Masjid</a>
+        <a class="feature-tile" href="/doa"><span class="emoji">🤲</span>Doa</a>
+        <a class="feature-tile" href="/surat"><span class="emoji">📖</span>Surat</a>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">Keluar</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BADGES = [
+    { emoji: '🌱', name: 'Pemula', has: s => s.prayer_full_days >= 1 || s.zikir_active_days >= 1 },
+    { emoji: '🔥', name: 'Istiqamah 7', has: s => s.prayer_streak >= 7 },
+    { emoji: '⭐', name: 'Istiqamah 30', has: s => s.prayer_streak >= 30 },
+    { emoji: '📿', name: 'Ahli Zikir', has: s => s.zikir_total >= 1000 },
+    { emoji: '💎', name: 'Zikir 10K', has: s => s.zikir_total >= 10000 },
+    { emoji: '📖', name: 'Khatam', has: s => s.khatam_percent >= 100 },
+];
+
+async function loadStats() {
+    const s = await (await fetch('/api/me/stats')).json();
+    document.getElementById('s-prayer-streak').textContent = s.prayer_streak;
+    document.getElementById('s-zikir-streak').textContent = s.zikir_streak;
+    document.getElementById('s-zikir-total').textContent = s.zikir_total;
+    document.getElementById('s-prayer-days').textContent = s.prayer_full_days;
+    document.getElementById('s-week-txt').textContent = s.prayer_week + '/35';
+    document.getElementById('s-week-bar').style.width = (s.prayer_week / 35 * 100) + '%';
+    document.getElementById('badges').innerHTML = BADGES.map(b => {
+        const on = b.has(s);
+        return `<span class="badge ${on ? 'on' : 'off'}">${b.emoji} ${b.name}${on ? '' : ' 🔒'}</span>`;
+    }).join('');
+}
+
+async function load() {
+    loadStats();
+    const [pRes, lRes] = await Promise.all([
+        fetch('/api/me/quran/progress'), fetch('/api/me/location')
+    ]);
+    const p = await pRes.json(), l = await lRes.json();
+
+    document.getElementById('reads').textContent = p.reads.length + ' / ' + p.total_surat;
+    document.getElementById('bar').style.width = p.khatam_percent + '%';
+    document.getElementById('pct').textContent = p.khatam_percent + '%';
+
+    if (p.progress) {
+        document.getElementById('last').textContent = 'Surat ' + p.progress.last_surat + ' : ' + p.progress.last_ayat;
+        const r = document.getElementById('resume');
+        r.style.display = 'flex';
+        r.href = '/surat/' + p.progress.last_surat;
+    }
+    if (l.provinsi && l.kabkota) {
+        document.getElementById('loc').textContent = l.kabkota + ', ' + l.provinsi;
+    }
+}
+load();
+</script>
+{% endblock %}

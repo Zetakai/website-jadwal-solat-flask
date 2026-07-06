@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Ibadah{% endblock %}
+{% block header_title %}Ceklis Shalat{% endblock %}
+{% block header_subtitle %}Pantau shalat lima waktu{% endblock %}
+
+{% block extra_css %}
+.prayer-row { display:flex; align-items:center; justify-content:space-between; padding:1rem 0;
+    border-bottom:1px solid rgba(16,185,129,0.15); }
+.prayer-row:last-child { border-bottom:none; }
+.prayer-row .left { display:flex; align-items:center; gap:0.75rem; }
+.prayer-row .emoji { width:40px;height:40px;border-radius:12px; display:flex;align-items:center;
+    justify-content:center; font-size:1.2rem; background:rgba(16,185,129,0.15); }
+.prayer-row .name { font-weight:500; color:#d1fae5; }
+.check { width:32px;height:32px;border-radius:50%; border:2px solid rgba(16,185,129,0.5);
+    cursor:pointer; display:flex;align-items:center;justify-content:center; transition:all 0.2s; }
+.check.on { background:linear-gradient(135deg,#10b981,#059669); border-color:#10b981; }
+.check svg { width:18px;height:18px;fill:#022c22; opacity:0; }
+.check.on svg { opacity:1; }
+.summary { text-align:center; margin-bottom:1rem; }
+.summary .big { font-size:2.5rem; font-weight:700; color:#10b981; }
+
+/* Kalender */
+.cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
+.cal-head button { background:rgba(6,78,59,0.6); border:1px solid rgba(16,185,129,0.4); color:#ecfdf5;
+    width:34px;height:34px;border-radius:10px; cursor:pointer; font-size:1.1rem; }
+.cal-title { font-weight:600; color:#ecfdf5; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.cal-dow { text-align:center; font-size:0.65rem; color:#6ee7b7; padding:0.25rem 0; }
+.cal-cell { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; font-size:0.8rem; color:#d1fae5; background:rgba(6,78,59,0.35);
+    border:1px solid transparent; cursor:pointer; }
+.cal-cell.empty { background:none; cursor:default; }
+.cal-cell.full { background:rgba(16,185,129,0.35); color:#ecfdf5; font-weight:600; }
+.cal-cell.partial { background:rgba(234,179,8,0.22); }
+.cal-cell.missed { background:rgba(239,68,68,0.18); color:#fca5a5; }
+.cal-cell.future { opacity:0.35; cursor:not-allowed; }
+.cal-cell.today { border-color:#10b981; }
+.cal-cell.selected { outline:2px solid #34d399; }
+.cal-cell .dot { font-size:0.55rem; margin-top:1px; opacity:0.8; }
+.cal-legend { display:flex; gap:0.75rem; flex-wrap:wrap; font-size:0.68rem; color:#6ee7b7; margin-top:0.75rem; }
+.cal-legend span { display:flex; align-items:center; gap:0.3rem; }
+.cal-legend i { width:12px;height:12px;border-radius:3px; display:inline-block; }
+{% endblock %}
+
+{% block content %}
+<div class="content-grid">
+<div class="col-full card summary">
+    <div style="color:#6ee7b7;font-size:0.8rem;margin-bottom:0.4rem;" id="sel-date"></div>
+    <div class="big"><span id="done">0</span>/5</div>
+    <div style="color:#6ee7b7;font-size:0.85rem;">Shalat selesai</div>
+    <div class="progress-track" style="margin-top:0.75rem;"><div class="progress-fill" id="bar" style="width:0%"></div></div>
+</div>
+
+<div class="card" id="list">
+    {% for p in prayers %}
+    <div class="prayer-row">
+        <div class="left">
+            <div class="emoji">{{ p.emoji }}</div>
+            <span class="name">{{ p.label }}</span>
+        </div>
+        <div class="check" data-key="{{ p.key }}">
+            <svg viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="cal-head">
+        <button id="prev">‹</button>
+        <span class="cal-title" id="cal-title"></span>
+        <button id="next">›</button>
+    </div>
+    <div class="cal-grid" id="cal-dow"></div>
+    <div class="cal-grid" id="cal-grid" style="margin-top:4px;"></div>
+    <div class="cal-legend">
+        <span><i style="background:rgba(16,185,129,0.6)"></i>Lengkap</span>
+        <span><i style="background:rgba(234,179,8,0.6)"></i>Sebagian</span>
+        <span><i style="background:rgba(239,68,68,0.5)"></i>Terlewat</span>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const checks = [...document.querySelectorAll('.check')];
+const bar = document.getElementById('bar');
+const doneEl = document.getElementById('done');
+const selDateEl = document.getElementById('sel-date');
+const DOW = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+const today = new Date();
+const todayIso = toIso(today);
+let selected = todayIso;
+let calYear = today.getFullYear();
+let calMonth = today.getMonth() + 1;   // 1-12
+let monthData = {};                    // iso -> {completed,...}
+
+function toIso(d) { return d.toISOString().slice(0, 10); }
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// --- Checklist tanggal terpilih ---
+function renderChecklist(state) {
+    let n = 0;
+    checks.forEach(c => {
+        const on = !!state[c.dataset.key];
+        c.classList.toggle('on', on);
+        if (on) n++;
+    });
+    doneEl.textContent = n;
+    bar.style.width = (n / 5 * 100) + '%';
+    monthData[selected] = state;
+    if (calYear === +selected.slice(0,4) && calMonth === +selected.slice(5,7)) renderCalendar();
+}
+
+async function loadChecklist() {
+    const d = new Date(selected + 'T00:00:00');
+    selDateEl.textContent = DOW[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN[d.getMonth()] + ' ' + d.getFullYear()
+        + (selected === todayIso ? ' (Hari ini)' : '');
+    const res = await fetch('/api/me/prayer?date=' + selected);
+    renderChecklist(await res.json());
+}
+
+async function toggle(key, value) {
+    const res = await fetch('/api/me/prayer', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selected, [key]: value })
+    });
+    renderChecklist(await res.json());
+}
+
+checks.forEach(c => c.addEventListener('click', () => {
+    if (selected > todayIso) return;   // tidak bisa shalat di masa depan
+    toggle(c.dataset.key, !c.classList.contains('on'));
+}));
+
+// --- Kalender bulanan ---
+async function loadCalendar() {
+    const res = await fetch(`/api/me/prayer/history?year=${calYear}&month=${calMonth}`);
+    const data = await res.json();
+    monthData = { ...data.days, ...(monthData[selected] ? { [selected]: monthData[selected] } : {}) };
+    renderCalendar();
+}
+
+function renderCalendar() {
+    document.getElementById('cal-title').textContent = BULAN[calMonth - 1] + ' ' + calYear;
+    document.getElementById('cal-dow').innerHTML = DOW.map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+    const first = new Date(calYear, calMonth - 1, 1);
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    for (let i = 0; i < first.getDay(); i++)
+        grid.insertAdjacentHTML('beforeend', '<div class="cal-cell empty"></div>');
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${calYear}-${pad(calMonth)}-${pad(day)}`;
+        const rec = monthData[iso];
+        const completed = rec ? rec.completed : 0;
+        const cls = ['cal-cell'];
+        const isFuture = iso > todayIso;
+        if (isFuture) cls.push('future');
+        else if (completed === 5) cls.push('full');
+        else if (completed > 0) cls.push('partial');
+        else if (iso < todayIso) cls.push('missed');
+        if (iso === todayIso) cls.push('today');
+        if (iso === selected) cls.push('selected');
+
+        const cell = document.createElement('div');
+        cell.className = cls.join(' ');
+        cell.innerHTML = `${day}${!isFuture ? `<span class="dot">${completed}/5</span>` : ''}`;
+        if (!isFuture) cell.addEventListener('click', () => { selected = iso; loadChecklist(); renderCalendar(); });
+        grid.appendChild(cell);
+    }
+}
+
+document.getElementById('prev').addEventListener('click', () => {
+    calMonth--; if (calMonth < 1) { calMonth = 12; calYear--; } loadCalendar();
+});
+document.getElementById('next').addEventListener('click', () => {
+    calMonth++; if (calMonth > 12) { calMonth = 1; calYear++; } loadCalendar();
+});
+
+loadChecklist();
+loadCalendar();
+</script>
+{% endblock %}

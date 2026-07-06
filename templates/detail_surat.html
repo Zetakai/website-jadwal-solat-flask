@@ -105,6 +105,10 @@
     <div class="surat-header">
         <h2 id="surat-name-arabic"></h2>
         <div class="arti" id="surat-arti"></div>
+        <div id="read-controls" style="margin-top:1rem;display:none;">
+            <button id="mark-read" class="btn btn-ghost">Tandai Khatam</button>
+            <div id="bookmark-note" style="color:#6ee7b7;font-size:0.75rem;margin-top:0.6rem;"></div>
+        </div>
     </div>
     <div id="ayat-list"></div>
 </div>
@@ -126,6 +130,8 @@
 {% block scripts %}
 <script>
     const nomorSurat = {{ nomor }};
+    const LOGGED_IN = {{ 'true' if current_user.is_authenticated else 'false' }};
+    let isRead = false;
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
     const errorText = document.getElementById('error-text');
@@ -182,10 +188,52 @@
                 <div class="ayat-latin">${a.teksLatin}</div>
                 <div class="ayat-translation">${a.teksIndonesia}</div>
             `;
+            if (LOGGED_IN) {
+                div.style.cursor = 'pointer';
+                div.title = 'Ketuk untuk menandai posisi baca';
+                div.addEventListener('click', () => saveBookmark(a.nomorAyat));
+            }
             ayatListEl.appendChild(div);
         });
     }
 
-    fetchDetailSurat();
+    // --- Progres Al-Qur'an (khusus pengguna login) ---
+    async function saveBookmark(ayat) {
+        await fetch('/api/me/quran/progress', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ surat: nomorSurat, ayat })
+        });
+        document.getElementById('bookmark-note').textContent = 'Posisi baca tersimpan: ayat ' + ayat;
+    }
+
+    async function initProgress() {
+        if (!LOGGED_IN) return;
+        document.getElementById('read-controls').style.display = 'block';
+        const res = await fetch('/api/me/quran/progress');
+        const data = await res.json();
+        isRead = data.reads.includes(nomorSurat);
+        updateReadBtn();
+        if (data.progress && data.progress.last_surat === nomorSurat) {
+            document.getElementById('bookmark-note').textContent =
+                'Posisi baca terakhir: ayat ' + data.progress.last_ayat;
+        }
+    }
+
+    function updateReadBtn() {
+        const btn = document.getElementById('mark-read');
+        btn.textContent = isRead ? '✓ Sudah Khatam' : 'Tandai Khatam';
+        btn.classList.toggle('btn-primary', isRead);
+        btn.classList.toggle('btn-ghost', !isRead);
+    }
+
+    document.getElementById('mark-read').addEventListener('click', async () => {
+        const method = isRead ? 'DELETE' : 'POST';
+        await fetch('/api/me/quran/reads/' + nomorSurat, { method });
+        isRead = !isRead;
+        updateReadBtn();
+    });
+
+    fetchDetailSurat().then(initProgress);
 </script>
 {% endblock %}

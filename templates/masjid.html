@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}Peta{% endblock %}
+{% block header_title %}Peta{% endblock %}
+{% block header_subtitle %}Masjid sekitar & arah kiblat{% endblock %}
+
+{% block extra_css %}
+#map { width:100%; height:340px; border-radius:16px; border:1px solid rgba(16,185,129,0.4); }
+.mode-tabs { display:flex; gap:0.5rem; margin-bottom:1rem; }
+.mode-tab { flex:1; text-align:center; padding:0.7rem; border-radius:12px; cursor:pointer;
+    background:rgba(6,78,59,0.5); border:1px solid rgba(16,185,129,0.3); color:#a7f3d0; font-weight:600; font-size:0.9rem; }
+.mode-tab.active { background:linear-gradient(135deg,#10b981,#059669); color:#022c22; }
+
+.loc-row { display:flex; gap:0.5rem; }
+.loc-row input { flex:1; padding:0.75rem 1rem; border:1px solid rgba(16,185,129,0.4); border-radius:12px;
+    background:rgba(6,78,59,0.5); color:#ecfdf5; font-family:inherit; font-size:0.9rem; }
+.loc-row button { width:auto; flex:0 0 auto; padding:0 1.1rem; }
+.loc-status { display:flex; align-items:center; gap:0.5rem; font-size:0.8rem; color:#6ee7b7; margin-top:0.75rem; }
+.mini-spin { width:16px; height:16px; border:2px solid rgba(16,185,129,0.25); border-top-color:#10b981;
+    border-radius:50%; animation:spin 0.8s linear infinite; flex:0 0 auto; }
+.loc-results { margin-top:0.5rem; }
+.loc-results div { padding:0.6rem 0.8rem; font-size:0.82rem; color:#d1fae5; border-radius:8px; cursor:pointer;
+    border:1px solid rgba(16,185,129,0.2); margin-bottom:0.35rem; }
+.loc-results div:hover { background:rgba(16,185,129,0.15); }
+.hint { font-size:0.72rem; color:#6ee7b7; opacity:0.75; margin-top:0.5rem; }
+
+.masjid-item { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0;
+    border-bottom:1px solid rgba(16,185,129,0.15); font-size:0.85rem; }
+.masjid-item:last-child { border-bottom:none; }
+.masjid-item .name { color:#d1fae5; }
+.masjid-item .dist { color:#10b981; font-weight:600; white-space:nowrap; margin-left:0.5rem; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background:#064e3b; color:#ecfdf5; }
+.svg-pin { background:none; border:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4)); }
+
+.compass-wrap { text-align:center; padding:1rem; }
+.compass { position:relative; width:200px; height:200px; margin:0 auto 1rem; border-radius:50%;
+    border:2px solid rgba(16,185,129,0.4); background:radial-gradient(circle,rgba(6,78,59,0.6),rgba(2,44,34,0.8)); }
+.compass .dir { position:absolute; color:#6ee7b7; font-size:0.75rem; font-weight:600; }
+.dir.n { top:6px; left:50%; transform:translateX(-50%); color:#fca5a5; }
+.dir.s { bottom:6px; left:50%; transform:translateX(-50%); }
+.dir.e { right:8px; top:50%; transform:translateY(-50%); }
+.dir.w { left:8px; top:50%; transform:translateY(-50%); }
+.dial { position:absolute; inset:0; transition:transform 0.15s ease; }
+.kaaba { position:absolute; top:4px; left:50%; transform:translateX(-50%); font-size:1.6rem;
+    filter:drop-shadow(0 0 6px rgba(16,185,129,0.7)); }
+.qibla-deg { font-size:1.8rem; font-weight:700; color:#10b981; }
+{% endblock %}
+
+{% block content %}
+<div class="mode-tabs">
+    <div class="mode-tab active" data-mode="masjid">🕌 Masjid</div>
+    <div class="mode-tab" data-mode="kiblat">🧭 Kiblat</div>
+</div>
+
+<div class="card">
+    <div class="loc-row">
+        <input id="loc-search" placeholder="Cari kota / tempat..." autocomplete="off">
+        <button id="loc-go" class="btn btn-primary">Cari</button>
+    </div>
+    <div class="loc-results" id="loc-results"></div>
+    <button id="use-gps" class="btn btn-ghost" style="margin-top:0.6rem;">📍 Gunakan Lokasi Saya</button>
+    <div class="loc-status" id="loc-status"><span class="mini-spin"></span><span id="loc-status-text">Mencari lokasi Anda...</span></div>
+    <div class="hint">Seret penanda atau klik peta untuk menyetel lokasi manual.</div>
+</div>
+
+<div class="card" style="padding:0.75rem;">
+    <div id="map"></div>
+</div>
+
+<div class="card" id="panel-masjid">
+    <div class="card-title">Masjid Terdekat</div>
+    <div id="list" style="color:#6ee7b7;font-size:0.85rem;">—</div>
+</div>
+
+<div class="card compass-wrap" id="panel-kiblat" style="display:none;">
+    <div class="compass">
+        <span class="dir n">U</span><span class="dir s">S</span>
+        <span class="dir e">T</span><span class="dir w">B</span>
+        <div class="dial" id="dial"><div class="kaaba">🕋</div></div>
+    </div>
+    <div class="qibla-deg" id="deg">—°</div>
+    <div id="status" style="color:#6ee7b7;font-size:0.85rem;">Mengaktifkan kompas...</div>
+    <button class="btn btn-primary" id="enable-btn" style="margin-top:1rem;display:none;">Aktifkan Kompas</button>
+    <div style="font-size:0.78rem;color:#d1fae5;line-height:1.6;margin-top:1rem;">
+        Letakkan ponsel mendatar, putar tubuh hingga 🕋 berada di atas. Garis hijau di peta menunjukkan arah kiblat.
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const KAABA = { lat: 21.4224779, lng: 39.8261722 };
+const listEl = document.getElementById('list');
+const dial = document.getElementById('dial');
+const degEl = document.getElementById('deg');
+const statusEl = document.getElementById('status');
+const enableBtn = document.getElementById('enable-btn');
+const locStatus = document.getElementById('loc-status');
+const locStatusText = document.getElementById('loc-status-text');
+const resultsEl = document.getElementById('loc-results');
+
+let map, userMarker, mosqueLayer, qiblaLine = null, kaabaMarker = null;
+let userLoc = null, qiblaBearing = null, heading = 0, mode = 'masjid';
+
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+
+// Penanda pin SVG (konsisten lintas OS, tidak bergantung emoji).
+function pinIcon(color, glyph) {
+    const html = `<svg width="30" height="38" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 23 15 23s15-12.5 15-23C30 6.7 23.3 0 15 0z"
+              fill="${color}" stroke="#022c22" stroke-width="1.3"/>${glyph}</svg>`;
+    return L.divIcon({ className: 'svg-pin', html, iconSize: [30, 38], iconAnchor: [15, 38], popupAnchor: [0, -34] });
+}
+const MOSQUE_GLYPH = `<g fill="#fff" transform="translate(0,-1)">
+    <path d="M15 6.2c-1.9 1.4-2.9 2.8-2.9 4.3h5.8c0-1.5-1-2.9-2.9-4.3z"/>
+    <rect x="9" y="11" width="12" height="1.6" rx="0.5"/>
+    <path d="M9.6 13.2h10.8v7.3h-2.6v-2.9a2.6 2.6 0 0 0-5.2 0v2.9H9.6z"/>
+    <rect x="7.4" y="12.6" width="1.5" height="7.9" rx="0.4"/>
+    <rect x="21.1" y="12.6" width="1.5" height="7.9" rx="0.4"/></g>`;
+const KAABA_GLYPH = `<g transform="translate(15,15)">
+    <rect x="-6" y="-6" width="12" height="12" rx="1" fill="#111827"/>
+    <rect x="-6" y="-1.5" width="12" height="2" fill="#d4af37"/></g>`;
+const MOSQUE_ICON = pinIcon('#10b981', MOSQUE_GLYPH);
+const KAABA_ICON = pinIcon('#022c22', KAABA_GLYPH);
+const USER_ICON = pinIcon('#38bdf8', '<circle cx="15" cy="15" r="4.5" fill="#fff"/>');
+
+function setLocStatus(text, spinning) {
+    locStatus.style.display = 'flex';
+    locStatus.querySelector('.mini-spin').style.display = spinning ? 'block' : 'none';
+    locStatusText.textContent = text;
+}
+
+function haversine(a, b, c, d) {
+    const R = 6371, dLat = rad(c-a), dLng = rad(d-b);
+    const x = Math.sin(dLat/2)**2 + Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+function computeQibla(lat, lng) {
+    const dLng = rad(KAABA.lng - lng);
+    const y = Math.sin(dLng) * Math.cos(rad(KAABA.lat));
+    const x = Math.cos(rad(lat))*Math.sin(rad(KAABA.lat)) - Math.sin(rad(lat))*Math.cos(rad(KAABA.lat))*Math.cos(dLng);
+    return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+// Titik-titik sepanjang jalur great-circle dari (lat1,lng1) ke (lat2,lng2).
+function greatCircle(lat1, lng1, lat2, lng2, n) {
+    const φ1 = rad(lat1), λ1 = rad(lng1), φ2 = rad(lat2), λ2 = rad(lng2);
+    const dφ = φ2 - φ1, dλ = λ2 - λ1;
+    const h = Math.sin(dφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2;
+    const δ = 2 * Math.asin(Math.min(1, Math.sqrt(h)));   // jarak sudut
+    if (δ === 0) return [[lat1, lng1], [lat2, lng2]];
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+        const f = i / n;
+        const a = Math.sin((1-f)*δ) / Math.sin(δ);
+        const b = Math.sin(f*δ) / Math.sin(δ);
+        const x = a*Math.cos(φ1)*Math.cos(λ1) + b*Math.cos(φ2)*Math.cos(λ2);
+        const y = a*Math.cos(φ1)*Math.sin(λ1) + b*Math.cos(φ2)*Math.sin(λ2);
+        const z = a*Math.sin(φ1) + b*Math.sin(φ2);
+        pts.push([deg(Math.atan2(z, Math.hypot(x, y))), deg(Math.atan2(y, x))]);
+    }
+    return pts;
+}
+
+// Buat peta segera (tak menunggu lokasi). Pusat awal = Indonesia.
+function initMap(center) {
+    map = L.map('map').setView(center, 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+    mosqueLayer = L.layerGroup().addTo(map);
+    map.on('click', e => setLocation(e.latlng.lat, e.latlng.lng));
+}
+
+// Setel/ubah lokasi (dari GPS, pencarian, seret penanda, atau klik peta).
+function setLocation(lat, lng, recenter) {
+    userLoc = { lat, lng };
+    if (!userMarker) {
+        userMarker = L.marker([lat, lng], { draggable: true, icon: USER_ICON })
+            .addTo(map).bindPopup('Lokasi Anda');
+        userMarker.on('dragend', e => { const p = e.target.getLatLng(); setLocation(p.lat, p.lng); });
+    } else {
+        userMarker.setLatLng([lat, lng]);
+    }
+    if (recenter) map.setView([lat, lng], 14);
+    qiblaBearing = computeQibla(lat, lng);
+    degEl.textContent = Math.round(qiblaBearing) + '°';
+    drawQiblaLine();
+    fetchMosques(lat, lng);
+}
+
+function drawQiblaLine() {
+    if (!map || qiblaBearing === null) return;
+    if (qiblaLine) { map.removeLayer(qiblaLine); qiblaLine = null; }
+    if (kaabaMarker) { map.removeLayer(kaabaMarker); kaabaMarker = null; }
+    if (mode !== 'kiblat') return;
+
+    // Garis great-circle penuh dari lokasi pengguna sampai Ka'bah.
+    const path = greatCircle(userLoc.lat, userLoc.lng, KAABA.lat, KAABA.lng, 128);
+    qiblaLine = L.polyline(path,
+        { color: '#10b981', weight: 4, opacity: 0.9, dashArray: '8 6' }).addTo(map);
+    kaabaMarker = L.marker([KAABA.lat, KAABA.lng], { icon: KAABA_ICON }).addTo(map)
+        .bindPopup("🕋 Ka'bah, Makkah");
+}
+
+async function fetchMosques(lat, lng) {
+    mosqueLayer.clearLayers();
+    listEl.textContent = 'Memuat masjid...';
+    const q = `[out:json][timeout:25];(
+        node["amenity"="place_of_worship"]["religion"="muslim"](around:3000,${lat},${lng});
+        way["amenity"="place_of_worship"]["religion"="muslim"](around:3000,${lat},${lng});
+    );out center 40;`;
+    try {
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST', body: 'data=' + encodeURIComponent(q) });
+        const data = await res.json();
+        const mosques = data.elements.map(e => {
+            const la = e.lat || e.center?.lat, ln = e.lon || e.center?.lon;
+            return { name: (e.tags && e.tags.name) || 'Masjid', lat: la, lng: ln, dist: haversine(lat, lng, la, ln) };
+        }).filter(m => m.lat).sort((a, b) => a.dist - b.dist);
+
+        if (!mosques.length) { listEl.textContent = 'Tidak ada masjid ditemukan di sekitar.'; return; }
+        mosques.forEach(m => L.marker([m.lat, m.lng], { icon: MOSQUE_ICON }).addTo(mosqueLayer)
+            .bindPopup(`🕌 ${m.name}<br>${m.dist.toFixed(2)} km`));
+        listEl.innerHTML = mosques.slice(0, 15).map(m =>
+            `<div class="masjid-item"><span class="name">🕌 ${m.name}</span>
+             <span class="dist">${m.dist.toFixed(2)} km</span></div>`).join('');
+    } catch (e) { listEl.textContent = 'Gagal memuat data masjid.'; }
+}
+
+// --- Pencarian lokasi (Nominatim / OpenStreetMap) ---
+async function searchLocation(query) {
+    if (!query.trim()) return;
+    resultsEl.innerHTML = '';
+    setLocStatus('Mencari "' + query + '"...', true);
+    try {
+        const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q='
+            + encodeURIComponent(query), { headers: { 'Accept-Language': 'id' } });
+        const data = await res.json();
+        setLocStatus(data.length ? 'Pilih hasil di bawah.' : 'Lokasi tidak ditemukan.', false);
+        resultsEl.innerHTML = data.map(r =>
+            `<div data-lat="${r.lat}" data-lng="${r.lon}">${r.display_name}</div>`).join('');
+        resultsEl.querySelectorAll('div').forEach(d => d.addEventListener('click', () => {
+            resultsEl.innerHTML = '';
+            setLocStatus('Lokasi disetel manual.', false);
+            setLocation(+d.dataset.lat, +d.dataset.lng, true);
+        }));
+    } catch (e) { setLocStatus('Gagal mencari lokasi.', false); }
+}
+
+// --- GPS ---
+function useGps() {
+    if (!navigator.geolocation) { setLocStatus('Geolokasi tidak didukung. Cari manual.', false); return; }
+    setLocStatus('Mencari lokasi Anda...', true);
+    navigator.geolocation.getCurrentPosition(
+        pos => { setLocStatus('Lokasi ditemukan (akurasi ±' + Math.round(pos.coords.accuracy) + ' m).', false);
+                 setLocation(pos.coords.latitude, pos.coords.longitude, true); },
+        () => { setLocStatus('Gagal mendapatkan lokasi. Cari manual atau klik peta.', false);
+                if (!userLoc) setLocation(-6.2088, 106.8456, true); },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+// --- Kompas kiblat ---
+function updateDial() { if (qiblaBearing !== null) dial.style.transform = `rotate(${qiblaBearing - heading}deg)`; }
+function onOrientation(e) {
+    if (e.webkitCompassHeading != null) heading = e.webkitCompassHeading;
+    else if (e.alpha != null) heading = 360 - e.alpha;
+    updateDial();
+}
+let compassStarted = false;
+function startCompass() {
+    if (compassStarted) return;
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        enableBtn.style.display = 'block';
+        enableBtn.onclick = () => DeviceOrientationEvent.requestPermission().then(s => {
+            if (s === 'granted') { enableBtn.style.display = 'none'; attachOrientation(); }
+            else statusEl.textContent = 'Izin sensor ditolak'; });
+    } else { attachOrientation(); }
+}
+function attachOrientation() {
+    compassStarted = true;
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+    statusEl.textContent = 'Arahkan ponsel ke simbol Ka\'bah';
+}
+
+// --- Ganti mode ---
+document.querySelectorAll('.mode-tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    mode = t.dataset.mode;
+    const kiblat = mode === 'kiblat';
+    document.getElementById('panel-kiblat').style.display = kiblat ? 'block' : 'none';
+    document.getElementById('panel-masjid').style.display = kiblat ? 'none' : 'block';
+    drawQiblaLine();
+    if (kiblat) startCompass();
+    if (map) setTimeout(() => map.invalidateSize(), 100);
+}));
+
+// --- Events ---
+document.getElementById('loc-go').addEventListener('click', () => searchLocation(document.getElementById('loc-search').value));
+document.getElementById('loc-search').addEventListener('keydown', e => { if (e.key === 'Enter') searchLocation(e.target.value); });
+document.getElementById('use-gps').addEventListener('click', useGps);
+
+// Peta tampil langsung, lalu lokasi menyusul.
+initMap([-6.2088, 106.8456]);
+if (new URLSearchParams(location.search).get('mode') === 'kiblat' || location.hash === '#kiblat') {
+    document.querySelector('.mode-tab[data-mode="kiblat"]').click();
+}
+useGps();
+</script>
+{% endblock %}

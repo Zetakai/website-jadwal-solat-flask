@@ -26,3 +26,6 @@ instance/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local DB
+*.db
