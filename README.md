@@ -50,7 +50,8 @@ Endpoint equran.id yang dipanggil oleh backend:
 
 **Perlu login (data per pengguna):**
 - Simpan lokasi favorit → jadwal termuat otomatis
-- Progres baca Al-Qur'an: posisi baca terakhir + persen khatam
+- Progres baca Al-Qur'an: auto-track saat menggulir + tombol tandai manual,
+  lanjut-otomatis (resume), persen khatam berbobot ayat, posisi juz, streak baca
 - Tasbih/zikir digital + kalender riwayat harian
 - Ceklis shalat lima waktu + **kalender bulanan** (tandai shalat terlewat)
 - **Streak, statistik & lencana** (gamifikasi) di halaman profil

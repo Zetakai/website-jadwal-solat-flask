@@ -20,6 +20,46 @@ ZIKIR_KEYS = {z["key"] for z in ZIKIR_TYPES}
 
 PRAYER_FIELDS = ("subuh", "dzuhur", "ashar", "maghrib", "isya")
 
+# Jumlah ayat tiap surat (Hafs). Indeks 0 tak dipakai (surat 1..114).
+AYAT_COUNTS = [
+    0, 7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99,
+    128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30,
+    73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45,
+    60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52,
+    44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26,
+    30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3,
+    5, 4, 5, 6,
+]
+TOTAL_AYAT = sum(AYAT_COUNTS)  # 6236
+
+# Awal tiap juz (surat, ayat) — 30 juz.
+JUZ_STARTS = [
+    (1, 1), (2, 142), (2, 253), (3, 93), (4, 24), (4, 148), (5, 82), (6, 111),
+    (7, 88), (8, 41), (9, 93), (11, 6), (12, 53), (15, 1), (17, 1), (18, 75),
+    (21, 1), (23, 1), (25, 21), (27, 56), (29, 46), (33, 31), (36, 28),
+    (39, 32), (41, 47), (46, 1), (51, 31), (58, 1), (67, 1), (78, 1),
+]
+TOTAL_JUZ = 30
+
+
+def global_ayat_index(surat, ayat):
+    """Nomor ayat global (1..6236) dari posisi surat:ayat."""
+    return sum(AYAT_COUNTS[1:surat]) + ayat
+
+
+# Indeks global awal tiap juz (untuk pencarian cepat).
+_JUZ_START_INDEX = [global_ayat_index(s, a) for s, a in JUZ_STARTS]
+
+
+def juz_of(surat, ayat):
+    """Juz (1..30) yang memuat posisi surat:ayat."""
+    idx = global_ayat_index(surat, ayat)
+    juz = 1
+    for j, start in enumerate(_JUZ_START_INDEX, start=1):
+        if idx >= start:
+            juz = j
+    return juz
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -52,6 +92,9 @@ class User(UserMixin, db.Model):
     prayer_logs = db.relationship(
         "PrayerLog", backref="user", cascade="all, delete-orphan",
     )
+    reading_logs = db.relationship(
+        "ReadingLog", backref="user", cascade="all, delete-orphan",
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -61,7 +104,9 @@ class User(UserMixin, db.Model):
 
     @property
     def khatam_percent(self):
-        return round(len(self.surat_reads) / TOTAL_SURAT * 100, 1)
+        # Berbobot jumlah ayat (lebih akurat daripada jumlah surat).
+        read_ayat = sum(AYAT_COUNTS[r.surat_no] for r in self.surat_reads)
+        return round(read_ayat / TOTAL_AYAT * 100, 1)
 
     def __repr__(self):
         return f"<User {self.email}>"
@@ -84,6 +129,7 @@ class QuranProgress(db.Model):
         return {
             "last_surat": self.last_surat,
             "last_ayat": self.last_ayat,
+            "juz": juz_of(self.last_surat, self.last_ayat),
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
@@ -96,6 +142,16 @@ class SuratRead(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     surat_no = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ReadingLog(db.Model):
+    """Satu baris per hari saat pengguna membaca Al-Qur'an (untuk streak)."""
+    __tablename__ = "reading_logs"
+    __table_args__ = (db.UniqueConstraint("user_id", "log_date"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    log_date = db.Column(db.Date, nullable=False, default=date.today)
 
 
 class ZikirLog(db.Model):

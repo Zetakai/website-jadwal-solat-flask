@@ -93,6 +93,27 @@
     border-radius: 10px;
     filter: sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%);
 }
+.ayat-item.current {
+    border-left: 3px solid #10b981;
+    padding-left: 0.85rem;
+    margin-left: -0.85rem;
+    background: rgba(16,185,129,0.07);
+    border-radius: 0 10px 10px 0;
+}
+.ayat-mark {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    background: none; border: 1px solid rgba(16,185,129,0.4); color: #6ee7b7;
+    border-radius: 8px; font-size: 0.72rem; font-family: inherit;
+    padding: 0.3rem 0.6rem; cursor: pointer; margin-top: 0.75rem;
+}
+.ayat-mark.active { background: linear-gradient(135deg,#10b981,#059669); color: #022c22; border-color: #10b981; font-weight: 600; }
+.reading-bar {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 0.6rem;
+    background: rgba(2,44,34,0.85); backdrop-filter: blur(10px);
+    border: 1px solid rgba(16,185,129,0.3); border-radius: 12px;
+    padding: 0.5rem 0.8rem; margin-bottom: 1rem; font-size: 0.78rem; color: #6ee7b7;
+}
+.reading-bar .prog { flex: 1; }
 {% endblock %}
 
 {% block content %}
@@ -109,6 +130,11 @@
             <button id="mark-read" class="btn btn-ghost">Tandai Khatam</button>
             <div id="bookmark-note" style="color:#6ee7b7;font-size:0.75rem;margin-top:0.6rem;"></div>
         </div>
+    </div>
+    <div class="reading-bar" id="reading-bar" style="display:none;">
+        <span id="reading-pos">Ayat 0/0</span>
+        <div class="prog"><div class="progress-track"><div class="progress-fill" id="reading-fill" style="width:0%"></div></div></div>
+        <span id="reading-juz"></span>
     </div>
     <div id="ayat-list"></div>
 </div>
@@ -177,47 +203,103 @@
             ayatListEl.appendChild(bismillahDiv);
         }
 
+        totalAyat = ayatArray.length;
         ayatArray.forEach(a => {
+            const n = a.nomorAyat;
             const div = document.createElement('div');
             div.className = 'ayat-item';
+            div.id = 'ayat-' + n;
+            div.dataset.ayat = n;
             div.innerHTML = `
                 <div class="ayat-top">
-                    <div class="ayat-number">${a.nomorAyat}</div>
+                    <div class="ayat-number">${n}</div>
                     <div class="ayat-arabic">${a.teksArab}</div>
                 </div>
                 <div class="ayat-latin">${a.teksLatin}</div>
                 <div class="ayat-translation">${a.teksIndonesia}</div>
             `;
             if (LOGGED_IN) {
-                div.style.cursor = 'pointer';
-                div.title = 'Ketuk untuk menandai posisi baca';
-                div.addEventListener('click', () => saveBookmark(a.nomorAyat));
+                const btn = document.createElement('button');
+                btn.className = 'ayat-mark';
+                btn.innerHTML = '🔖 Tandai di sini';
+                btn.addEventListener('click', () => saveProgress(n, true));
+                div.appendChild(btn);
             }
             ayatListEl.appendChild(div);
         });
     }
 
     // --- Progres Al-Qur'an (khusus pengguna login) ---
-    async function saveBookmark(ayat) {
-        await fetch('/api/me/quran/progress', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+    let totalAyat = 0, savedAyat = 0, maxSeen = 0, saveTimer = null;
+
+    function updateReadingBar(ayat) {
+        document.getElementById('reading-pos').textContent = `Ayat ${ayat}/${totalAyat}`;
+        document.getElementById('reading-fill').style.width = (ayat / totalAyat * 100) + '%';
+    }
+
+    function highlightCurrent(ayat) {
+        document.querySelectorAll('.ayat-item.current').forEach(e => e.classList.remove('current'));
+        document.querySelectorAll('.ayat-mark.active').forEach(e => {
+            e.classList.remove('active'); e.innerHTML = '🔖 Tandai di sini';
+        });
+        const el = document.getElementById('ayat-' + ayat);
+        if (el) {
+            el.classList.add('current');
+            const mark = el.querySelector('.ayat-mark');
+            if (mark) { mark.classList.add('active'); mark.innerHTML = '✓ Posisi baca'; }
+        }
+    }
+
+    // Simpan posisi. `manual`=true untuk tombol tandai (boleh mundur).
+    async function saveProgress(ayat, manual) {
+        savedAyat = ayat;
+        maxSeen = Math.max(maxSeen, ayat);
+        updateReadingBar(ayat);
+        highlightCurrent(ayat);
+        const res = await fetch('/api/me/quran/progress', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ surat: nomorSurat, ayat })
         });
-        document.getElementById('bookmark-note').textContent = 'Posisi baca tersimpan: ayat ' + ayat;
+        const d = await res.json();
+        document.getElementById('reading-juz').textContent = 'Juz ' + d.juz;
+        if (manual) document.getElementById('bookmark-note').textContent = 'Posisi baca ditandai: ayat ' + ayat;
+    }
+
+    // Auto-track: simpan ayat terjauh yang terlihat saat menggulir (maju saja).
+    function setupAutoTrack() {
+        const obs = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                if (e.isIntersecting) maxSeen = Math.max(maxSeen, +e.target.dataset.ayat);
+            });
+            if (maxSeen > savedAyat) {
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(() => saveProgress(maxSeen, false), 800);
+            }
+        }, { threshold: 0.6 });
+        document.querySelectorAll('.ayat-item[data-ayat]').forEach(el => obs.observe(el));
     }
 
     async function initProgress() {
         if (!LOGGED_IN) return;
         document.getElementById('read-controls').style.display = 'block';
+        document.getElementById('reading-bar').style.display = 'flex';
         const res = await fetch('/api/me/quran/progress');
         const data = await res.json();
         isRead = data.reads.includes(nomorSurat);
         updateReadBtn();
+
         if (data.progress && data.progress.last_surat === nomorSurat) {
-            document.getElementById('bookmark-note').textContent =
-                'Posisi baca terakhir: ayat ' + data.progress.last_ayat;
+            savedAyat = maxSeen = data.progress.last_ayat;
+            updateReadingBar(savedAyat);
+            highlightCurrent(savedAyat);
+            document.getElementById('reading-juz').textContent = 'Juz ' + data.progress.juz;
+            document.getElementById('bookmark-note').textContent = 'Melanjutkan dari ayat ' + savedAyat;
+            const el = document.getElementById('ayat-' + savedAyat);   // auto-resume
+            if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+        } else {
+            updateReadingBar(0);
         }
+        setupAutoTrack();
     }
 
     function updateReadBtn() {

@@ -6,8 +6,8 @@ from flask_login import login_required, current_user
 
 from ..extensions import db
 from ..models import (
-    QuranProgress, SuratRead, ZikirLog, PrayerLog,
-    ZIKIR_KEYS, PRAYER_FIELDS, TOTAL_SURAT,
+    QuranProgress, SuratRead, ZikirLog, PrayerLog, ReadingLog,
+    ZIKIR_KEYS, PRAYER_FIELDS, TOTAL_SURAT, TOTAL_JUZ, juz_of,
 )
 
 tracker_bp = Blueprint("tracker", __name__, url_prefix="/api/me")
@@ -101,6 +101,11 @@ def save_progress():
         db.session.add(p)
     else:
         p.last_surat, p.last_ayat = surat, ayat
+
+    # Catat hari membaca (untuk streak) — satu baris per tanggal.
+    today = date.today()
+    if not ReadingLog.query.filter_by(user_id=current_user.id, log_date=today).first():
+        db.session.add(ReadingLog(user_id=current_user.id, log_date=today))
     db.session.commit()
     return jsonify(p.to_dict())
 
@@ -273,6 +278,11 @@ def stats():
     zikir_days = {r.log_date for r in zikir_rows if r.count > 0}
     zikir_total = sum(r.count for r in zikir_rows)
 
+    # Baca Al-Qur'an
+    reading_days = {r.log_date for r in current_user.reading_logs}
+    p = current_user.quran_progress
+    current_juz = juz_of(p.last_surat, p.last_ayat) if p else 0
+
     return jsonify({
         "prayer_streak": _trailing_streak(full_days),
         "prayer_full_days": len(full_days),
@@ -280,6 +290,10 @@ def stats():
         "zikir_streak": _trailing_streak(zikir_days),
         "zikir_active_days": len(zikir_days),
         "zikir_total": zikir_total,
+        "reading_streak": _trailing_streak(reading_days),
+        "reading_days": len(reading_days),
+        "current_juz": current_juz,
+        "total_juz": TOTAL_JUZ,
         "khatam_percent": current_user.khatam_percent,
         "reads_count": len(current_user.surat_reads),
         "total_surat": TOTAL_SURAT,

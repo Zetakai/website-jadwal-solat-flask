@@ -47,10 +47,14 @@
 
 <div class="card">
     <div class="card-title">Progres Al-Qur'an</div>
+    <div class="stat-row"><span class="k">🔥 Streak baca (hari)</span><span class="v" id="read-streak">0</span></div>
+    <div class="stat-row"><span class="k">Juz saat ini</span><span class="v" id="cur-juz">—</span></div>
     <div class="stat-row"><span class="k">Surat dikhatam</span><span class="v" id="reads">—</span></div>
     <div class="stat-row"><span class="k">Terakhir dibaca</span><span class="v" id="last">—</span></div>
-    <div class="progress-track" style="margin-top:0.8rem;"><div class="progress-fill" id="bar" style="width:0%"></div></div>
-    <div style="text-align:center;color:#6ee7b7;font-size:0.8rem;margin-top:0.5rem;" id="pct">0%</div>
+    <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#6ee7b7;margin:0.9rem 0 0.4rem;">
+        <span>Khatam (berdasarkan ayat)</span><span id="pct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="bar" style="width:0%"></div></div>
     <a href="#" id="resume" class="btn btn-ghost" style="margin-top:1rem;display:none;">Lanjutkan Membaca</a>
 </div>
 
@@ -88,7 +92,8 @@ const BADGES = [
     { emoji: '⭐', name: 'Istiqamah 30', has: s => s.prayer_streak >= 30 },
     { emoji: '📿', name: 'Ahli Zikir', has: s => s.zikir_total >= 1000 },
     { emoji: '💎', name: 'Zikir 10K', has: s => s.zikir_total >= 10000 },
-    { emoji: '📖', name: 'Khatam', has: s => s.khatam_percent >= 100 },
+    { emoji: '📖', name: 'Rajin Baca 7', has: s => s.reading_streak >= 7 },
+    { emoji: '🏆', name: 'Khatam', has: s => s.khatam_percent >= 100 },
 ];
 
 async function loadStats() {
@@ -99,6 +104,8 @@ async function loadStats() {
     document.getElementById('s-prayer-days').textContent = s.prayer_full_days;
     document.getElementById('s-week-txt').textContent = s.prayer_week + '/35';
     document.getElementById('s-week-bar').style.width = (s.prayer_week / 35 * 100) + '%';
+    document.getElementById('read-streak').textContent = s.reading_streak;
+    document.getElementById('cur-juz').textContent = s.current_juz ? s.current_juz + ' / ' + s.total_juz : '—';
     document.getElementById('badges').innerHTML = BADGES.map(b => {
         const on = b.has(s);
         return `<span class="badge ${on ? 'on' : 'off'}">${b.emoji} ${b.name}${on ? '' : ' 🔒'}</span>`;
