@@ -110,17 +110,29 @@ Buka browser di `http://127.0.0.1:5000`.
 Proxy publik (`app/blueprints/api.py`): `/api/provinces`, `/api/cities`,
 `/api/schedule`, `/api/doa`, `/api/surat`, `/api/surat/<nomor>`.
 
-Fitur per-pengguna, perlu login (`app/blueprints/tracker.py`, prefix `/api/me`) —
-CRUD penuh:
+Fitur per-pengguna, perlu login (`app/blueprints/tracker.py`, prefix `/api/me`).
 
-| Resource | Method + path |
-|----------|---------------|
-| Lokasi   | `GET/PUT/DELETE /location` |
-| Progres Qur'an | `GET/PUT /quran/progress` |
-| Khatam surat | `POST/DELETE /quran/reads/<no>` |
-| Zikir | `GET /zikir`, `POST/DELETE /zikir/<key>`, `GET /zikir/history?year=&month=` |
-| Ceklis shalat | `GET/PUT /prayer`, `GET /prayer/history?year=&month=` |
-| Statistik | `GET /stats` (streak, total, mingguan) |
+**Pemetaan operasi CRUD → HTTP method:**
+
+| CRUD | Operasi | HTTP Method |
+|------|---------|-------------|
+| **C**reate | Tambah data baru | `POST` |
+| **R**ead | Baca / ambil data | `GET` |
+| **U**pdate | Ubah data | `PUT` |
+| **D**elete | Hapus / reset data | `DELETE` |
+
+**Operasi CRUD per resource** (✓ = didukung):
+
+| Resource | Endpoint dasar | C `POST` | R `GET` | U `PUT` | D `DELETE` |
+|----------|----------------|:---:|:---:|:---:|:---:|
+| Lokasi | `/location` | — | ✓ | ✓ | ✓ |
+| Progres Qur'an | `/quran/progress` | — | ✓ | ✓ | — |
+| Khatam surat | `/quran/reads/<no>` | ✓ | — | — | ✓ |
+| Zikir | `/zikir`, `/zikir/<key>` | ✓ | ✓ | — | ✓ |
+| Ceklis shalat | `/prayer` | — | ✓ | ✓ | — |
+
+Endpoint baca tambahan (Read): `GET /zikir/history`, `GET /prayer/history`,
+`GET /stats` (streak, statistik, lencana) — semua menerima `?year=&month=` bila relevan.
 
 ## Struktur Proyek
 
