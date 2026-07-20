@@ -1,7 +1,7 @@
 """Application factory."""  # pabrik aplikasi Flask
 import os
 
-from flask import Flask
+from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
 from .config import config_by_name, Config
@@ -31,9 +31,30 @@ def create_app(config_name=None):
 
     from . import models  # noqa: F401  (daftarkan model + user_loader)
     _register_blueprints(app)
+    _register_error_handlers(app)
     _register_cli(app)
 
     return app
+
+
+def _register_error_handlers(app):
+    """Halaman error ramah pengguna (HTML) + JSON untuk endpoint /api."""
+    messages = {
+        404: "Halaman yang Anda cari tidak ditemukan.",
+        403: "Anda tidak memiliki akses ke halaman ini.",
+        500: "Terjadi kesalahan pada server. Silakan coba lagi.",
+    }
+
+    def handler(err):
+        code = getattr(err, "code", 500) or 500
+        if request.path.startswith("/api/"):
+            return jsonify({"error": messages.get(code, "Kesalahan")}), code
+        return render_template(
+            "error.html", code=code, message=messages.get(code, "Terjadi kesalahan.")
+        ), code
+
+    for code in (403, 404, 500):
+        app.register_error_handler(code, handler)
 
 
 def _ensure_sqlite_dir(app):
