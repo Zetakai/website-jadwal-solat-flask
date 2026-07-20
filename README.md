@@ -57,6 +57,9 @@ Endpoint equran.id yang dipanggil oleh backend:
 - **Streak, statistik & lencana** (gamifikasi) di halaman profil
 - Home: **hitung mundur shalat berikutnya** + sorot waktu sekarang + **tanggal Hijriah**
 
+**Penanganan error:** handler kustom 404/403/500 → halaman error ramah
+pengguna (`templates/error.html`) untuk halaman, respons JSON untuk path `/api`.
+
 UI modern tema hijau Islami, responsif — mode mobile (bottom nav) & desktop (top nav).
 Tanggal Hijriah pakai kalender Islam bawaan browser (`Intl`), tanpa API eksternal.
 
@@ -152,8 +155,8 @@ Endpoint baca tambahan (Read): `GET /zikir/history`, `GET /prayer/history`,
 │       ├── auth.py         # daftar/masuk/keluar
 │       ├── api.py          # proxy equran.id (publik)
 │       └── tracker.py      # fitur per-pengguna (perlu login)
-├── templates/              # base, index, doa, surat, detail_surat,
-│                           #   zikir, ibadah, masjid (peta+kiblat), profile, auth/
+├── templates/              # base, index, doa, surat, detail_surat, zikir,
+│                           #   ibadah, masjid (peta+kiblat), profile, error, auth/
 ├── .gitignore
 └── README.md
 ```
